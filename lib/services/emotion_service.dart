@@ -277,21 +277,8 @@ class EmotionService extends ChangeNotifier {
   
   // 모든 사용된 태그 목록 가져오기
   Future<List<String>> getAllTags() async {
-    try {
-      // 모든 기록 가져오기
-      final allRecords = await getEmotionRecords();
-      
-      // 모든 태그 추출 및 중복 제거
-      final Set<String> uniqueTags = {};
-      for (final record in allRecords) {
-        uniqueTags.addAll(record.tags);
-      }
-      
-      return uniqueTags.toList();
-    } catch (e) {
-      print('태그 목록 가져오기 오류: $e');
-      return [];
-    }
+    await _loadCustomTags(); // 최신 태그 목록 로드
+    return allTags;
   }
   
   // 월별 감정 기록 가져오기
@@ -406,29 +393,32 @@ class EmotionService extends ChangeNotifier {
   Future<void> _loadCustomTags() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonList = prefs.getStringList(_customTagsKey);
+      final tagsList = prefs.getStringList(_customTagsKey);
       
-      if (jsonList != null && jsonList.isNotEmpty) {
-        _customTags = jsonList;
+      if (tagsList != null && tagsList.isNotEmpty) {
+        _customTags = tagsList;
       }
+      
+      notifyListeners();
     } catch (e) {
       print('사용자 정의 태그 로드 오류: $e');
     }
   }
   
   // 사용자 정의 태그 저장
-  Future<void> saveCustomTags(List<String> tags) async {
+  Future<bool> saveCustomTags(List<String> tags) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      // 기본 태그 제외
+      // 기본 태그 제외하고 사용자 정의 태그만 저장
       _customTags = tags.where((tag) => !_defaultTags.contains(tag)).toList();
       
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_customTagsKey, _customTags);
+      
       notifyListeners();
-      return;
+      return true;
     } catch (e) {
       print('사용자 정의 태그 저장 오류: $e');
+      return false;
     }
   }
   
@@ -436,16 +426,16 @@ class EmotionService extends ChangeNotifier {
   Future<bool> addCustomTag(String tag) async {
     try {
       // 이미 존재하는 태그인지 확인
-      if (allTags.contains(tag)) {
+      if (_defaultTags.contains(tag) || _customTags.contains(tag)) {
         return false;
       }
       
-      // 새 태그 추가
       _customTags.add(tag);
       
       // 저장하고 알림
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_customTagsKey, _customTags);
+      
       notifyListeners();
       return true;
     } catch (e) {
@@ -462,13 +452,13 @@ class EmotionService extends ChangeNotifier {
         return false;
       }
       
-      final initialLength = _customTags.length;
-      _customTags.remove(tag);
+      final success = _customTags.remove(tag);
       
-      if (_customTags.length < initialLength) {
+      if (success) {
         // 저장하고 알림
         final prefs = await SharedPreferences.getInstance();
         await prefs.setStringList(_customTagsKey, _customTags);
+        
         notifyListeners();
         return true;
       }

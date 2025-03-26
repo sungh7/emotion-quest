@@ -54,9 +54,20 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   
   // 사용 가능한 태그 로드
   Future<void> _loadTags() async {
-    setState(() {
-      _availableTags = _emotionService.allTags;
-    });
+    try {
+      final tags = await _emotionService.getAllTags();
+      
+      setState(() {
+        _availableTags = tags;
+      });
+    } catch (e) {
+      print('태그 로드 오류: $e');
+      
+      // 에러 발생 시 빈 리스트라도 표시
+      setState(() {
+        _availableTags = [];
+      });
+    }
   }
 
   // 이미지 선택
