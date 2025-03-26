@@ -1,11 +1,11 @@
 {
-    "name": "emotion_control",
-    "short_name": "emotion_control",
+    "name": "감정 퀘스트",
+    "short_name": "감정 퀘스트",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1e1e1e",
+    "theme_color": "#009688",
+    "description": "감정을 기록하고 관리하는 앱",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
@@ -30,6 +30,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "screenshots/home.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "platform": "narrow",
+            "label": "홈 화면"
+        },
+        {
+            "src": "screenshots/report.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "platform": "narrow",
+            "label": "리포트 화면"
         }
     ]
 }
