@@ -12,6 +12,7 @@ class TagManagementScreen extends StatefulWidget {
 class _TagManagementScreenState extends State<TagManagementScreen> {
   final _formKey = GlobalKey<FormState>();
   final _tagController = TextEditingController();
+  final _tagFocusNode = FocusNode();
   
   List<String> _allTags = [];
   bool _isLoading = true;
@@ -25,6 +26,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   @override
   void dispose() {
     _tagController.dispose();
+    _tagFocusNode.dispose();
     super.dispose();
   }
   
@@ -93,6 +95,16 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           backgroundColor: success ? null : Colors.red,
         ),
       );
+      
+      // 성공적으로 추가되었다면 TextField에 다시 포커스
+      if (success) {
+        FocusScope.of(context).requestFocus(FocusNode());
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (_tagController.text.isEmpty && mounted) {
+            FocusScope.of(context).requestFocus(_tagFocusNode);
+          }
+        });
+      }
     }
   }
   
@@ -146,6 +158,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     
     return WillPopScope(
       onWillPop: () async {
+        // 키보드 포커스 해제
+        FocusScope.of(context).unfocus();
         Navigator.pop(context, true); // 태그 변경 성공 여부 반환
         return false;
       },
@@ -155,7 +169,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           centerTitle: true,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              // 키보드 포커스 해제
+              FocusScope.of(context).unfocus();
+              Navigator.pop(context, true);
+            },
           ),
         ),
         body: _isLoading
@@ -185,6 +203,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _tagController,
+                                  focusNode: _tagFocusNode,
                                   decoration: const InputDecoration(
                                     labelText: '태그 이름',
                                     hintText: '예: 업무, 가족, 건강, 여행',
@@ -196,6 +215,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                     }
                                     return null;
                                   },
+                                  onFieldSubmitted: (_) => _addTag(),
                                 ),
                               ),
                               const SizedBox(width: 12),

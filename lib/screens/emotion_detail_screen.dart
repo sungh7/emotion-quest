@@ -205,6 +205,8 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   // 태그 관리 화면으로 이동
   Future<void> _navigateToTagManagement() async {
     print('태그 관리 화면으로 이동');
+    // 키보드 포커스 해제
+    FocusScope.of(context).unfocus();
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TagManagementScreen()),
