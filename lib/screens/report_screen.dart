@@ -1331,6 +1331,8 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   
   // 태그 검색 UI
   Widget _buildTagSearch() {
+    final textFieldFocus = FocusNode();
+    
     return Column(
       children: [
         Padding(
@@ -1346,31 +1348,73 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                 ),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                  labelText: '태그 선택',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.tag),
-                ),
-                value: _selectedTag,
-                hint: const Text('태그를 선택하세요'),
-                isExpanded: true,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('모든 태그'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      focusNode: textFieldFocus,
+                      decoration: const InputDecoration(
+                        labelText: '태그 검색',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.search),
+                        hintText: '태그 이름 입력',
+                        helperText: 'Enter 키를 눌러 검색',
+                      ),
+                      onSubmitted: (value) {
+                        // 입력된 태그로 검색
+                        if (value.trim().isNotEmpty) {
+                          setState(() {
+                            _selectedTag = _allTags.contains(value.trim()) 
+                                ? value.trim() 
+                                : null;
+                            _filterRecordsByTag();
+                          });
+                        } else {
+                          // 비어있으면 모든 태그 보기
+                          setState(() {
+                            _selectedTag = null;
+                            _filterRecordsByTag();
+                          });
+                        }
+                      },
+                    ),
                   ),
-                  ..._allTags.map((tag) => DropdownMenuItem<String>(
-                    value: tag,
-                    child: Text(tag),
-                  )).toList(),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      textFieldFocus.unfocus();
+                      // 현재 필터 초기화
+                      setState(() {
+                        _selectedTag = null;
+                        _filterRecordsByTag();
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('초기화'),
+                  ),
                 ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedTag = value;
-                    _filterRecordsByTag();
-                  });
-                },
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _allTags.map((tag) {
+                  final isSelected = _selectedTag == tag;
+                  return FilterChip(
+                    label: Text(tag),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedTag = selected ? tag : null;
+                        _filterRecordsByTag();
+                      });
+                    },
+                    selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    checkmarkColor: Theme.of(context).colorScheme.primary,
+                  );
+                }).toList(),
               ),
             ],
           ),

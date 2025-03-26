@@ -26,6 +26,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   
+  late FocusNode _passwordFocusNode;
+  
   @override
   void initState() {
     super.initState();
@@ -53,6 +55,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     );
     
     _animationController.forward();
+    
+    _passwordFocusNode = FocusNode();
   }
   
   @override
@@ -60,6 +64,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _emailController.dispose();
     _passwordController.dispose();
     _animationController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -215,6 +220,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                   }
                                   return null;
                                 },
+                                onFieldSubmitted: (_) {
+                                  // 비밀번호 필드로 포커스 이동
+                                  FocusScope.of(context).requestFocus(_passwordFocusNode);
+                                },
                               ),
                               const SizedBox(height: 16),
                               
@@ -224,6 +233,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                 label: '비밀번호',
                                 icon: CupertinoIcons.lock,
                                 obscureText: !_isPasswordVisible,
+                                focusNode: _passwordFocusNode,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
                                     return '비밀번호를 입력해주세요';
@@ -246,6 +256,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                                     });
                                   },
                                 ),
+                                onFieldSubmitted: (_) => _authenticate(),
                               ),
                               
                               // 에러 메시지
@@ -329,6 +340,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     Widget? suffixIcon,
+    FocusNode? focusNode,
+    void Function(String)? onFieldSubmitted,
   }) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Colors.blue;
@@ -386,6 +399,8 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           vertical: 16,
         ),
       ),
+      focusNode: focusNode,
+      onFieldSubmitted: onFieldSubmitted,
     );
   }
   

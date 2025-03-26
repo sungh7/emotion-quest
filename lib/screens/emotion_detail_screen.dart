@@ -6,6 +6,8 @@ import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
 import '../screens/tag_management_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 class EmotionDetailScreen extends StatefulWidget {
   final String emotion;
@@ -24,31 +26,38 @@ class EmotionDetailScreen extends StatefulWidget {
 class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   final TextEditingController _detailsController = TextEditingController();
   final TextEditingController _diaryController = TextEditingController();
-  final EmotionService _emotionService = EmotionService();
-  final ImagePicker _picker = ImagePicker();
+  
+  // 포커스 노드 추가
+  final FocusNode _detailsFocusNode = FocusNode();
+  final FocusNode _diaryFocusNode = FocusNode();
   
   bool _isLoading = false;
   bool _isRecording = false;
   
-  // 태그 관련 상태
-  List<String> _availableTags = [];
-  final Set<String> _selectedTags = {};
-  
-  // 미디어 파일 상태
   File? _imageFile;
   File? _videoFile;
   File? _audioFile;
-
+  
+  late EmotionService _emotionService;
+  Set<String> _selectedTags = {};
+  List<String> _availableTags = [];
+  
+  // 이미지 선택을 위한 ImagePicker 인스턴스
+  final ImagePicker _picker = ImagePicker();
+  
   @override
   void initState() {
     super.initState();
+    _emotionService = Provider.of<EmotionService>(context, listen: false);
     _loadTags();
   }
-
+  
   @override
   void dispose() {
     _detailsController.dispose();
     _diaryController.dispose();
+    _detailsFocusNode.dispose();
+    _diaryFocusNode.dispose();
     super.dispose();
   }
   
@@ -348,11 +357,19 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: _detailsController,
+                          focusNode: _detailsFocusNode,
                           decoration: const InputDecoration(
                             hintText: '지금 느끼는 감정에 대해 자세히 설명해보세요.',
                             border: OutlineInputBorder(),
+                            helperText: 'Enter: 다음 필드로 이동, Shift+Enter: 줄바꿈',
                           ),
                           maxLines: 3,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) {
+                            // 수정키(Shift 등)가 눌려있지 않은 경우에만 다음 필드로 이동
+                            FocusScope.of(context).requestFocus(_diaryFocusNode);
+                          },
                         ),
                         const SizedBox(height: 16),
                         
@@ -493,11 +510,15 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: _diaryController,
+                          focusNode: _diaryFocusNode,
                           decoration: const InputDecoration(
                             hintText: '오늘 있었던 일과 감정에 대한 일기를 작성해보세요.',
                             border: OutlineInputBorder(),
+                            helperText: 'Shift+Enter: 줄바꿈, Ctrl+S: 저장',
                           ),
                           maxLines: 5,
+                          keyboardType: TextInputType.multiline,
+                          onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         ),
                         
                         const SizedBox(height: 24),

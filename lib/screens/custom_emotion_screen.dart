@@ -14,6 +14,10 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
   final _emotionController = TextEditingController();
   final _emojiController = TextEditingController();
   
+  // 포커스 노드 추가
+  final _emotionFocusNode = FocusNode();
+  final _emojiFocusNode = FocusNode();
+  
   List<Map<String, String>> _customEmotions = [];
   bool _isLoading = true;
   bool _isSaving = false;
@@ -22,12 +26,19 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
   void initState() {
     super.initState();
     _loadCustomEmotions();
+    
+    // 첫 필드에 자동 포커스
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusScope.of(context).requestFocus(_emotionFocusNode);
+    });
   }
   
   @override
   void dispose() {
     _emotionController.dispose();
     _emojiController.dispose();
+    _emotionFocusNode.dispose();
+    _emojiFocusNode.dispose();
     super.dispose();
   }
   
@@ -199,6 +210,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
                             flex: 3,
                             child: TextFormField(
                               controller: _emotionController,
+                              focusNode: _emotionFocusNode,
                               decoration: const InputDecoration(
                                 labelText: '감정 이름',
                                 hintText: '예: 설렘, 뿌듯함, 허탈함',
@@ -210,6 +222,11 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
                                 }
                                 return null;
                               },
+                              textInputAction: TextInputAction.next,
+                              onFieldSubmitted: (_) {
+                                // 이모지 필드로 포커스 이동
+                                FocusScope.of(context).requestFocus(_emojiFocusNode);
+                              },
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -219,6 +236,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
                             flex: 1,
                             child: TextFormField(
                               controller: _emojiController,
+                              focusNode: _emojiFocusNode,
                               decoration: const InputDecoration(
                                 labelText: '이모지',
                                 hintText: '😍',
@@ -230,6 +248,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
                                 }
                                 return null;
                               },
+                              onFieldSubmitted: (_) => _addEmotion(),
                             ),
                           ),
                         ],

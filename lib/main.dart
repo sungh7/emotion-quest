@@ -1,43 +1,35 @@
+import 'package:emotion_control/services/emotion_service.dart';
+import 'package:emotion_control/services/theme_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'screens/home_screen.dart';
+import 'screens/auth_screen.dart';
+import 'screens/report_screen.dart';
+import 'screens/emotion_detail_screen.dart';
 import 'dart:async';
 import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'services/theme_service.dart';
-import 'firebase_options.dart';
-import 'screens/home_screen.dart';
-import 'screens/report_screen.dart';
-import 'screens/auth_screen.dart';
-import 'screens/emotion_detail_screen.dart';
-import 'services/firebase_service.dart';
-import 'services/emotion_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 테마 서비스 초기화
-  final themeService = ThemeService();
-  await themeService.initialize();
-  
-  // Firebase 초기화
   bool firebaseInitialized = false;
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     firebaseInitialized = true;
-    print('Firebase 초기화 완료');
+    print('Firebase initialized successfully');
   } catch (e) {
-    print('Firebase 초기화 오류: $e');
-    firebaseInitialized = false;
+    print('Failed to initialize Firebase: $e');
   }
-  
+
   runApp(MyApp(
     firebaseInitialized: firebaseInitialized,
-    themeService: themeService,
+    themeService: ThemeService(),
   ));
 }
 
