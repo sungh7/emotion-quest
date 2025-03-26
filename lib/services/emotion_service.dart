@@ -20,6 +20,140 @@ class EmotionService extends ChangeNotifier {
   
   // 로컬 저장소 키
   static const String _storageKey = 'emotion_records';
+  static const String _customEmotionsKey = 'custom_emotions';
+  
+  // 기본 감정 목록
+  final List<Map<String, String>> _defaultEmotions = [
+    {'emotion': '행복', 'emoji': '😊'},
+    {'emotion': '슬픔', 'emoji': '😢'},
+    {'emotion': '분노', 'emoji': '😠'},
+    {'emotion': '불안', 'emoji': '😰'},
+    {'emotion': '놀람', 'emoji': '😲'},
+    {'emotion': '혐오', 'emoji': '🤢'},
+    {'emotion': '지루함', 'emoji': '😴'},
+  ];
+  
+  // 사용자 정의 감정 목록
+  List<Map<String, String>> _customEmotions = [];
+  
+  // 모든 감정 목록 (기본 + 사용자 정의)
+  List<Map<String, String>> get allEmotions => [..._defaultEmotions, ..._customEmotions];
+  
+  // 기본 감정 목록 가져오기
+  List<Map<String, String>> get defaultEmotions => _defaultEmotions;
+  
+  // 사용자 정의 감정 목록 가져오기
+  List<Map<String, String>> get customEmotions => _customEmotions;
+  
+  // 생성자에서 사용자 정의 감정 로드
+  EmotionService() {
+    _loadCustomEmotions();
+  }
+  
+  // 사용자 정의 감정 로드
+  Future<void> _loadCustomEmotions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = prefs.getStringList(_customEmotionsKey);
+      
+      if (jsonList != null && jsonList.isNotEmpty) {
+        _customEmotions = jsonList
+            .map((json) => Map<String, String>.from(jsonDecode(json)))
+            .toList();
+      }
+    } catch (e) {
+      print('사용자 정의 감정 로드 오류: $e');
+    }
+  }
+  
+  // 사용자 정의 감정 저장
+  Future<void> _saveCustomEmotions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _customEmotions
+          .map((emotion) => jsonEncode(emotion))
+          .toList();
+      
+      await prefs.setStringList(_customEmotionsKey, jsonList);
+    } catch (e) {
+      print('사용자 정의 감정 저장 오류: $e');
+    }
+  }
+  
+  // 사용자 정의 감정 추가
+  Future<bool> addCustomEmotion(String emotion, String emoji) async {
+    try {
+      // 이미 존재하는 감정인지 확인
+      final exists = [..._defaultEmotions, ..._customEmotions]
+          .any((item) => item['emotion'] == emotion || item['emoji'] == emoji);
+      
+      if (exists) {
+        return false;
+      }
+      
+      // 새 감정 추가
+      _customEmotions.add({'emotion': emotion, 'emoji': emoji});
+      
+      // 저장하고 알림
+      await _saveCustomEmotions();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('사용자 정의 감정 추가 오류: $e');
+      return false;
+    }
+  }
+  
+  // 사용자 정의 감정 삭제
+  Future<bool> removeCustomEmotion(String emotion) async {
+    try {
+      final initialLength = _customEmotions.length;
+      _customEmotions.removeWhere((item) => item['emotion'] == emotion);
+      
+      if (_customEmotions.length < initialLength) {
+        await _saveCustomEmotions();
+        notifyListeners();
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('사용자 정의 감정 삭제 오류: $e');
+      return false;
+    }
+  }
+  
+  // 사용자 정의 감정 수정
+  Future<bool> updateCustomEmotion(String oldEmotion, String newEmotion, String newEmoji) async {
+    try {
+      // 원래 감정 찾기
+      final index = _customEmotions.indexWhere((item) => item['emotion'] == oldEmotion);
+      
+      if (index == -1) {
+        return false;
+      }
+      
+      // 다른 감정과 중복되는지 확인
+      final exists = [..._defaultEmotions, ..._customEmotions]
+          .where((item) => item['emotion'] != oldEmotion) // 자기 자신 제외
+          .any((item) => item['emotion'] == newEmotion || item['emoji'] == newEmoji);
+      
+      if (exists) {
+        return false;
+      }
+      
+      // 감정 수정
+      _customEmotions[index] = {'emotion': newEmotion, 'emoji': newEmoji};
+      
+      // 저장하고 알림
+      await _saveCustomEmotions();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('사용자 정의 감정 수정 오류: $e');
+      return false;
+    }
+  }
   
   // 감정 기록 저장
   Future<bool> saveEmotionRecord(EmotionRecord record) async {
@@ -108,6 +242,39 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
+  // 특정 태그별 감정 기록 가져오기
+  Future<List<EmotionRecord>> getEmotionRecordsByTag(String tag) async {
+    try {
+      // 모든 기록 가져오기
+      final allRecords = await getEmotionRecords();
+      
+      // 선택된 태그의 기록만 필터링
+      return allRecords.where((record) => record.tags.contains(tag)).toList();
+    } catch (e) {
+      print('태그별 감정 기록 가져오기 오류: $e');
+      return [];
+    }
+  }
+  
+  // 모든 사용된 태그 목록 가져오기
+  Future<List<String>> getAllTags() async {
+    try {
+      // 모든 기록 가져오기
+      final allRecords = await getEmotionRecords();
+      
+      // 모든 태그 추출 및 중복 제거
+      final Set<String> uniqueTags = {};
+      for (final record in allRecords) {
+        uniqueTags.addAll(record.tags);
+      }
+      
+      return uniqueTags.toList();
+    } catch (e) {
+      print('태그 목록 가져오기 오류: $e');
+      return [];
+    }
+  }
+  
   // 월별 감정 기록 가져오기
   Future<List<EmotionRecord>> getEmotionRecordsByMonth(DateTime month) async {
     try {
@@ -141,6 +308,27 @@ class EmotionService extends ChangeNotifier {
       return counts;
     } catch (e) {
       print('감정 통계 가져오기 오류: $e');
+      return {};
+    }
+  }
+  
+  // 태그별 통계 가져오기
+  Future<Map<String, int>> getTagCounts() async {
+    try {
+      // 모든 기록 가져오기
+      final records = await getEmotionRecords();
+      final counts = <String, int>{};
+      
+      // 태그별 빈도수 계산
+      for (final record in records) {
+        for (final tag in record.tags) {
+          counts[tag] = (counts[tag] ?? 0) + 1;
+        }
+      }
+      
+      return counts;
+    } catch (e) {
+      print('태그 통계 가져오기 오류: $e');
       return {};
     }
   }
@@ -185,73 +373,12 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  // 월별 감정 맵 가져오기
-  Future<Map<DateTime, String?>> getMonthlyEmotionMap(DateTime month) async {
-    try {
-      // 모든 기록 가져오기
-      final allRecords = await getEmotionRecords();
-      final result = <DateTime, String?>{};
-      
-      // 같은 날짜의 기록을 그룹화
-      final recordsByDate = <String, List<EmotionRecord>>{};
-      
-      for (final record in allRecords) {
-        final date = DateTime(
-          record.timestamp.year,
-          record.timestamp.month,
-          record.timestamp.day,
-        );
-        
-        // 선택된 월에 속하는 기록만 필터링
-        if (date.year == month.year && date.month == month.month) {
-          final dateStr = date.toIso8601String().split('T')[0];
-          
-          if (!recordsByDate.containsKey(dateStr)) {
-            recordsByDate[dateStr] = [];
-          }
-          
-          recordsByDate[dateStr]!.add(record);
-        }
-      }
-      
-      // 날짜별로 가장 많이 기록된 감정을 대표 감정으로 선택
-      recordsByDate.forEach((dateStr, records) {
-        // 감정별 빈도수 계산
-        final emotionCounts = <String, int>{};
-        
-        for (final record in records) {
-          final emotion = record.emotion;
-          emotionCounts[emotion] = (emotionCounts[emotion] ?? 0) + 1;
-        }
-        
-        // 가장 많이 기록된 감정 찾기
-        String? mostCommonEmotion;
-        int maxCount = 0;
-        
-        emotionCounts.forEach((emotion, count) {
-          if (count > maxCount) {
-            mostCommonEmotion = emotion;
-            maxCount = count;
-          }
-        });
-        
-        final date = DateTime.parse(dateStr);
-        result[date] = mostCommonEmotion;
-      });
-      
-      return result;
-    } catch (e) {
-      print('월별 감정 맵 가져오기 오류: $e');
-      return {};
-    }
-  }
-  
-  // 날짜 키 형식 (YYYY-MM-DD)
+  // 날짜 키 포맷
   String _formatDateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
   
-  // 월 키 형식 (YYYY-MM)
+  // 월 키 포맷
   String _formatMonthKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}';
   }
