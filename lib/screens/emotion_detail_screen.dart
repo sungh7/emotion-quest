@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
@@ -27,11 +26,9 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   final TextEditingController _diaryController = TextEditingController();
   final EmotionService _emotionService = EmotionService();
   final ImagePicker _picker = ImagePicker();
-  final Record _audioRecorder = Record();
   
   bool _isLoading = false;
   bool _isRecording = false;
-  String? _recordingPath;
   
   // 태그 관련 상태
   List<String> _availableTags = [];
@@ -52,7 +49,6 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   void dispose() {
     _detailsController.dispose();
     _diaryController.dispose();
-    _audioRecorder.dispose();
     super.dispose();
   }
   
@@ -83,42 +79,20 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
     }
   }
 
-  // 오디오 녹음 시작
+  // 오디오 녹음 시작 (현재 미구현)
   Future<void> _startRecording() async {
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        final tempDir = await getTemporaryDirectory();
-        _recordingPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        
-        await _audioRecorder.start(
-          path: _recordingPath,
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          samplingRate: 44100,
-        );
-        
-        setState(() {
-          _isRecording = true;
-        });
-      }
-    } catch (e) {
-      print('녹음 시작 오류: $e');
-    }
+    // 녹음 기능 임시 비활성화
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('녹음 기능이 현재 비활성화되어 있습니다.'))
+    );
   }
 
-  // 오디오 녹음 중지
+  // 오디오 녹음 중지 (현재 미구현)
   Future<void> _stopRecording() async {
-    try {
-      final path = await _audioRecorder.stop();
-      setState(() {
-        _isRecording = false;
-        if (path != null) {
-          _audioFile = File(path);
-        }
-      });
-    } catch (e) {
-      print('녹음 중지 오류: $e');
-    }
+    // 녹음 기능 임시 비활성화
+    setState(() {
+      _isRecording = false;
+    });
   }
 
   // 상세 정보 없이 감정 저장
@@ -176,10 +150,6 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
       String? imageUrl;
       String? videoUrl;
       String? audioUrl;
-      
-      // TODO: Firebase Storage에 파일 업로드 로직 구현
-      // 1. _imageFile, _videoFile, _audioFile이 있으면 각각 업로드
-      // 2. 업로드 후 URL을 받아서 저장
 
       EmotionRecord record = EmotionRecord(
         emotion: widget.emotion,
@@ -216,19 +186,72 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
     }
   }
 
-  // 태그 토글 처리
-  void _toggleTag(String tag) {
-    setState(() {
-      if (_selectedTags.contains(tag)) {
-        _selectedTags.remove(tag);
-      } else {
-        _selectedTags.add(tag);
-      }
-    });
+  // 태그 관리 화면으로 이동
+  Future<void> _navigateToTagManagement() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TagManagementScreen()),
+    );
+    
+    if (result == true) {
+      // 태그 관리 화면에서 돌아왔을 때 태그 목록 다시 로드
+      _loadTags();
+    }
+  }
+
+  // 태그 선택 UI 위젯
+  Widget _buildTagSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Row(
+            children: [
+              const Text(
+                '태그',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _navigateToTagManagement,
+                icon: const Icon(Icons.settings, size: 18),
+                label: const Text('태그 관리'),
+              ),
+            ],
+          ),
+        ),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: _availableTags.map((tag) {
+            final isSelected = _selectedTags.contains(tag);
+            return FilterChip(
+              selected: isSelected,
+              label: Text(tag),
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedTags.add(tag);
+                  } else {
+                    _selectedTags.remove(tag);
+                  }
+                });
+              },
+              selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              checkmarkColor: Theme.of(context).colorScheme.primary,
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -275,42 +298,11 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                         ),
                         const SizedBox(height: 24),
                         
-                        // 태그 선택 영역
-                        const Text('태그 선택', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: _availableTags.map((tag) => FilterChip(
-                            label: Text(tag),
-                            selected: _selectedTags.contains(tag),
-                            onSelected: (_) => _toggleTag(tag),
-                            selectedColor: Theme.of(context).primaryColor.withOpacity(0.3),
-                          )).toList(),
-                        ),
-                        
-                        // 사용자 정의 태그 추가 버튼
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const TagManagementScreen(),
-                              ),
-                            ).then((_) => _loadTags()),
-                            icon: const Icon(Icons.add_circle_outline, size: 16),
-                            label: const Text('태그 관리'),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(0, 0),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                        // 태그 선택 UI 추가
+                        _buildTagSelector(),
                         
                         // 감정 설명 입력
+                        const SizedBox(height: 16),
                         const Text('감정 설명', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         TextField(

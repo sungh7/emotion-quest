@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
@@ -14,10 +15,21 @@ class ReportScreen extends StatefulWidget {
   State<ReportScreen> createState() => _ReportScreenState();
 }
 
-class _ReportScreenState extends State<ReportScreen> {
+class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderStateMixin {
   final EmotionService _emotionService = EmotionService();
   List<EmotionRecord> _records = [];
   bool _isLoading = true;
+  late TabController _tabController;
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+  
+  // 태그 검색 관련 상태
+  List<String> _allTags = [];
+  String? _selectedTag;
+  List<EmotionRecord> _filteredRecords = [];
+  
+  // 달력 이벤트
+  Map<DateTime, List<EmotionRecord>> _calendarEvents = {};
   
   final Map<String, String> _emojiMap = {
     '행복': '😊',
@@ -48,7 +60,15 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadRecords();
+    _loadTags();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecords() async {
@@ -58,6 +78,12 @@ class _ReportScreenState extends State<ReportScreen> {
     
     _records = await _emotionService.getEmotionRecords();
     _records.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // 최신순 정렬
+    
+    // 태그가 선택되어 있는 경우 필터링
+    _filterRecordsByTag();
+    
+    // 달력 이벤트 생성
+    _generateCalendarEvents();
     
     // 통계 정보 계산
     _calculateStats();
@@ -71,6 +97,44 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() {
       _isLoading = false;
     });
+  }
+  
+  // 태그 목록 로드
+  Future<void> _loadTags() async {
+    final tags = await _emotionService.getAllTags();
+    setState(() {
+      _allTags = tags;
+    });
+  }
+  
+  // 태그별 기록 필터링
+  void _filterRecordsByTag() {
+    if (_selectedTag == null) {
+      _filteredRecords = List.from(_records);
+    } else {
+      _filteredRecords = _records
+          .where((record) => record.tags.contains(_selectedTag))
+          .toList();
+    }
+  }
+  
+  // 달력 이벤트 생성
+  void _generateCalendarEvents() {
+    _calendarEvents = {};
+    
+    for (var record in _records) {
+      final date = DateTime(
+        record.timestamp.year,
+        record.timestamp.month,
+        record.timestamp.day,
+      );
+      
+      if (!_calendarEvents.containsKey(date)) {
+        _calendarEvents[date] = [];
+      }
+      
+      _calendarEvents[date]!.add(record);
+    }
   }
   
   void _calculateStats() {
@@ -368,211 +432,202 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? Colors.black : Colors.white;
-    final textColor = isDarkMode ? Colors.white : Color(0xFF111418);
-    final cardBackgroundColor = isDarkMode ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4);
-    final borderColor = isDarkMode ? Color(0xFF2C2C2C) : Color(0xFFDCE0E5);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Scaffold(
-      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        title: Text(
-          'Mood Report',
-          style: TextStyle(
-            color: textColor,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('감정 리포트'),
         centerTitle: true,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.analytics), text: '통계'),
+            Tab(icon: Icon(Icons.calendar_month), text: '달력'),
+            Tab(icon: Icon(Icons.tag), text: '태그 검색'),
+          ],
+        ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Overview 섹션
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                    child: Text(
-                      'Overview',
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Wrap(
-                      spacing: 16,
-                      runSpacing: 16,
-                      children: [
-                        _buildOverviewCard(
-                          title: 'Total Entries',
-                          value: '$_totalEntries',
-                          backgroundColor: cardBackgroundColor,
-                        ),
-                        _buildOverviewCard(
-                          title: 'Days Logged',
-                          value: '$_daysLogged',
-                          backgroundColor: cardBackgroundColor,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    child: _buildOverviewCard(
-                      title: 'Average Mood',
-                      value: _averageMood,
-                      backgroundColor: cardBackgroundColor,
-                      isFullWidth: true,
-                    ),
-                  ),
-                  
-                  // Trends 섹션 - 기존 코드에 트렌드 인사이트 추가
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Trends',
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                // 통계 탭 (기존 코드)
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Overview 섹션
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                        child: Text(
+                          'Overview',
                           style: TextStyle(
-                            color: textColor,
+                            color: isDark ? Colors.white : Color(0xFF111418),
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context, 
-                              builder: (context) => _buildTrendDetailSheet(context),
-                            );
-                          },
-                          child: Text('Details'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: borderColor, width: 1),
                       ),
-                      color: backgroundColor,
-                      margin: EdgeInsets.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
                           children: [
-                            Text(
-                              'Mood Across Time',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            _buildOverviewCard(
+                              title: 'Total Entries',
+                              value: '$_totalEntries',
+                              backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
                             ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              height: 180,
-                              child: _buildLineChart(context),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                'M', 'T', 'W', 'T', 'F', 'S', 'S'
-                              ].map((day) => Text(
-                                day,
-                                style: TextStyle(
-                                  color: Color(0xFF637588),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )).toList(),
+                            _buildOverviewCard(
+                              title: 'Days Logged',
+                              value: '$_daysLogged',
+                              backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                  
-                  // Common Patterns 섹션
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                    child: Text(
-                      'Common Patterns',
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        child: _buildOverviewCard(
+                          title: 'Average Mood',
+                          value: _averageMood,
+                          backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                          isFullWidth: true,
+                        ),
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                    child: GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 2.5,
-                      children: _emotionPatterns.map((pattern) {
-                        return InkWell(
-                          onTap: () => _showPatternDetail(context, pattern),
-                          child: _buildPatternCard(
-                            emoji: pattern['emoji'],
-                            title: pattern['title'],
-                            borderColor: borderColor,
-                            backgroundColor: backgroundColor,
-                            textColor: textColor,
-                            count: pattern['count'],
+                      
+                      // Trends 섹션 - 기존 코드에 트렌드 인사이트 추가
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Trends',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Color(0xFF111418),
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context, 
+                                  builder: (context) => _buildTrendDetailSheet(context),
+                                );
+                              },
+                              child: Text('Details'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: isDark ? Color(0xFF2C2C2C) : Color(0xFFDCE0E5), width: 1),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          color: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                          margin: EdgeInsets.zero,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Mood Across Time',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Color(0xFF111418),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 180,
+                                  child: _buildLineChart(context),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    'M', 'T', 'W', 'T', 'F', 'S', 'S'
+                                  ].map((day) => Text(
+                                    day,
+                                    style: TextStyle(
+                                      color: Color(0xFF637588),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )).toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      // Common Patterns 섹션
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                        child: Text(
+                          'Common Patterns',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Color(0xFF111418),
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 2.5,
+                          children: _emotionPatterns.map((pattern) {
+                            return InkWell(
+                              onTap: () => _showPatternDetail(context, pattern),
+                              child: _buildPatternCard(
+                                emoji: pattern['emoji'],
+                                title: pattern['title'],
+                                borderColor: isDark ? Color(0xFF2C2C2C) : Color(0xFFDCE0E5),
+                                backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                                textColor: isDark ? Colors.white : Color(0xFF111418),
+                                count: pattern['count'],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                
+                // 달력 탭 (새로 추가)
+                SingleChildScrollView(
+                  child: _buildCalendar(),
+                ),
+                
+                // 태그 검색 탭 (새로 추가)
+                _buildTagSearch(),
+              ],
             ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: backgroundColor,
-        selectedItemColor: textColor,
-        unselectedItemColor: Color(0xFF637588),
-        currentIndex: 1, // Reports 탭이 선택됨
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_box_outlined),
-            label: 'Record',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_rounded),
-            label: 'Reports',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-        ],
-        onTap: (index) {
-          if (index == 0) { // Record 탭
-            Navigator.of(context).pushReplacementNamed('/');
-          }
-          // Profile 탭은 아직 구현 안됨
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await _loadRecords();
+          await _loadTags();
         },
+        child: const Icon(Icons.refresh),
       ),
     );
   }
@@ -1124,6 +1179,272 @@ class _ReportScreenState extends State<ReportScreen> {
           },
         );
       },
+    );
+  }
+
+  // 캘린더 위젯 빌드
+  Widget _buildCalendar() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Column(
+      children: [
+        TableCalendar<EmotionRecord>(
+          firstDay: DateTime.utc(2021, 1, 1),
+          lastDay: DateTime.utc(2030, 12, 31),
+          focusedDay: _focusedDay,
+          calendarFormat: CalendarFormat.month,
+          eventLoader: (day) {
+            return _calendarEvents[DateTime(day.year, day.month, day.day)] ?? [];
+          },
+          selectedDayPredicate: (day) {
+            return isSameDay(_selectedDay, day);
+          },
+          onDaySelected: (selectedDay, focusedDay) {
+            setState(() {
+              _selectedDay = selectedDay;
+              _focusedDay = focusedDay;
+            });
+          },
+          onPageChanged: (focusedDay) {
+            _focusedDay = focusedDay;
+          },
+          calendarStyle: CalendarStyle(
+            markersMaxCount: 3,
+            markerDecoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
+            selectedDecoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.8),
+              shape: BoxShape.circle,
+            ),
+            todayDecoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+          ),
+          calendarBuilders: CalendarBuilders(
+            markerBuilder: (context, date, events) {
+              if (events.isEmpty) return const SizedBox.shrink();
+              
+              return Positioned(
+                bottom: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: events.take(3).map((event) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 1),
+                        child: Text(
+                          event.emoji,
+                          style: const TextStyle(fontSize: 8),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildSelectedDayEvents(),
+      ],
+    );
+  }
+  
+  // 선택한 날짜의 감정 기록 표시
+  Widget _buildSelectedDayEvents() {
+    final events = _calendarEvents[DateTime(
+      _selectedDay.year,
+      _selectedDay.month,
+      _selectedDay.day,
+    )] ?? [];
+    
+    if (events.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32.0),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.event_busy,
+                size: 48,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '${DateFormat('yyyy년 MM월 dd일 (E)', 'ko_KR').format(_selectedDay)}\n기록된 감정이 없습니다',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            '${DateFormat('yyyy년 MM월 dd일 (E)', 'ko_KR').format(_selectedDay)} 기록',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: events.length,
+          itemBuilder: (context, index) {
+            final record = events[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: ListTile(
+                leading: Text(
+                  record.emoji,
+                  style: const TextStyle(fontSize: 32),
+                ),
+                title: Text(record.emotion),
+                subtitle: record.details != null ? Text(record.details!) : null,
+                trailing: Text(
+                  DateFormat('HH:mm').format(record.timestamp),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+  
+  // 태그 검색 UI
+  Widget _buildTagSearch() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '태그로 감정 기록 찾기',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: '태그 선택',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.tag),
+                ),
+                value: _selectedTag,
+                hint: const Text('태그를 선택하세요'),
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('모든 태그'),
+                  ),
+                  ..._allTags.map((tag) => DropdownMenuItem<String>(
+                    value: tag,
+                    child: Text(tag),
+                  )).toList(),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedTag = value;
+                    _filterRecordsByTag();
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _filteredRecords.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _selectedTag != null
+                            ? '"$_selectedTag" 태그가 있는 기록이 없습니다'
+                            : '기록된 감정이 없습니다',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  itemCount: _filteredRecords.length,
+                  itemBuilder: (context, index) {
+                    final record = _filteredRecords[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                      child: ListTile(
+                        leading: Text(
+                          record.emoji,
+                          style: const TextStyle(fontSize: 32),
+                        ),
+                        title: Text(record.emotion),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (record.details != null)
+                              Text(
+                                record.details!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 4,
+                              children: record.tags.map((tag) => Chip(
+                                label: Text(tag, style: const TextStyle(fontSize: 10)),
+                                padding: EdgeInsets.zero,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              )).toList(),
+                            ),
+                          ],
+                        ),
+                        trailing: Text(
+                          DateFormat('yyyy-MM-dd\nHH:mm').format(record.timestamp),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        isThreeLine: true,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 } 

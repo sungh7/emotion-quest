@@ -381,6 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       
       // 감정 기록 저장
+      final emotionService = Provider.of<EmotionService>(context, listen: false);
       final success = await emotionService.saveEmotionRecord(record);
       
       if (success) {
