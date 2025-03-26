@@ -159,9 +159,17 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
 
   // 상세 정보와 함께 감정 저장
   Future<void> _saveWithDetails() async {
-    if (_detailsController.text.isEmpty) {
+    // 더 이상 감정 설명이 필수가 아님
+    // 감정 일기 또는 태그가 있는 경우에도 저장 가능
+    // 모든 필드가 비어있는 경우에만 경고 메시지 표시
+    if (_detailsController.text.isEmpty && 
+        _diaryController.text.isEmpty && 
+        _selectedTags.isEmpty && 
+        _imageFile == null && 
+        _videoFile == null && 
+        _audioFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('감정에 대한 설명을 입력해주세요')),
+        const SnackBar(content: Text('감정 설명, 일기, 태그 중 하나 이상 입력해주세요')),
       );
       return;
     }
@@ -180,12 +188,12 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
         emotion: widget.emotion,
         emoji: widget.emoji,
         timestamp: DateTime.now(),
-        details: _detailsController.text.trim(),
+        details: _detailsController.text.isEmpty ? null : _detailsController.text.trim(),
         tags: _selectedTags.toList(),
         imageUrl: imageUrl,
         videoUrl: videoUrl,
         audioUrl: audioUrl,
-        diaryContent: _diaryController.text.isNotEmpty ? _diaryController.text.trim() : null,
+        diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
 
       await _emotionService.saveEmotionRecord(record);
@@ -514,7 +522,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                           decoration: const InputDecoration(
                             hintText: '오늘 있었던 일과 감정에 대한 일기를 작성해보세요.',
                             border: OutlineInputBorder(),
-                            helperText: 'Shift+Enter: 줄바꿈, Ctrl+S: 저장',
+                            // helperText: 'Shift+Enter: 줄바꿈, Ctrl+S: 저장',
                           ),
                           maxLines: 5,
                           keyboardType: TextInputType.multiline,

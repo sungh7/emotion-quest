@@ -35,7 +35,7 @@
 
     <script>
       // The value below is injected by flutter build, do not touch.
-      var serviceWorkerVersion = "{{flutter_service_worker_version}}";
+      var serviceWorkerVersion = null;
     </script>
 
     <!-- This script adds the flutter initialization JS code -->
@@ -730,35 +730,100 @@
       // Flutter 초기화 전에 전역 변수 설정
       window.currentUser = null;
 
-      // Flutter 앱 출시 이후 Loading 스크린을 제거하는 코드
-      document.addEventListener("DOMContentLoaded", function () {
-        window.addEventListener("load", function () {
-          // 로딩 애니메이션을 1초 더 표시 후 페이드 아웃
-          setTimeout(function () {
-            const loading = document.getElementById("loading");
-            loading.style.opacity = "0";
-
-            // 페이드 아웃 후 제거
-            setTimeout(function () {
-              loading.remove();
-            }, 500);
-          }, 1000);
-        });
-      });
-
       // Flutter 웹 초기화
-      window.addEventListener("load", function (ev) {
-        // Download main.dart.js
-        _flutter.loader.load({
-          serviceWorker: {
-            serviceWorkerVersion: serviceWorkerVersion,
-          },
-          onEntrypointLoaded: function (engineInitializer) {
-            engineInitializer.initializeEngine().then(function (appRunner) {
-              appRunner.runApp();
+      window.addEventListener("load", function () {
+        // 로딩 요소 참조
+        var loading = document.getElementById("loading");
+        var loadingTimeout;
+
+        // 로딩 화면 제거 함수
+        function removeLoading() {
+          clearTimeout(loadingTimeout);
+          if (loading) {
+            loading.style.opacity = "0";
+            setTimeout(function () {
+              if (loading && loading.parentNode) {
+                loading.parentNode.removeChild(loading);
+              }
+            }, 500);
+          }
+        }
+
+        // 로딩 타임아웃 설정 (10초 후 강제 제거)
+        loadingTimeout = setTimeout(function () {
+          console.log("로딩 타임아웃 - 강제로 로딩 화면 제거");
+          removeLoading();
+        }, 10000);
+
+        // Flutter 초기화 함수
+        function initializeFlutter(loader) {
+          console.log("Flutter 초기화 시도 중...");
+
+          if (!loader) {
+            console.error("Flutter 로더가 없습니다");
+            removeLoading();
+            return;
+          }
+
+          try {
+            loader.loadEntrypoint({
+              serviceWorker: {
+                serviceWorkerVersion: serviceWorkerVersion,
+              },
+              onEntrypointLoaded: function (engineInitializer) {
+                engineInitializer
+                  .initializeEngine()
+                  .then(function (appRunner) {
+                    console.log("Flutter 엔진 초기화 성공, 앱 실행 중...");
+                    appRunner.runApp();
+                    // 앱이 실행된 후 로딩 화면 제거
+                    setTimeout(removeLoading, 1000);
+                  })
+                  .catch(function (error) {
+                    console.error("Flutter 엔진 초기화 실패:", error);
+                    removeLoading();
+                  });
+              },
             });
-          },
-        });
+          } catch (error) {
+            console.error("Flutter 초기화 중 오류 발생:", error);
+            removeLoading();
+          }
+        }
+
+        // Flutter.js 로딩 확인
+        var attempts = 0;
+        var checkFlutter = setInterval(function () {
+          attempts++;
+
+          // 여러 방식으로 Flutter 로더 찾기 시도
+          var flutterLoader = null;
+
+          if (typeof window.flutter !== "undefined") {
+            console.log("window.flutter 발견");
+            flutterLoader = window.flutter.loader;
+          } else if (typeof window._flutter !== "undefined") {
+            console.log("window._flutter 발견");
+            flutterLoader = window._flutter.loader;
+          }
+
+          if (flutterLoader) {
+            clearInterval(checkFlutter);
+            console.log("Flutter 로더 발견, 초기화 시작");
+            initializeFlutter(flutterLoader);
+          } else if (attempts > 50) {
+            // 5초 후 포기
+            clearInterval(checkFlutter);
+            console.error("5초 후에도 Flutter 로더를 찾을 수 없습니다");
+            console.log(
+              "window 객체 내 속성들:",
+              Object.keys(window).filter((key) => key.includes("flutter"))
+            );
+            removeLoading();
+          } else if (attempts % 10 === 0) {
+            console.log("Flutter 로더 찾는 중... 시도 횟수:", attempts);
+          }
+        }, 100);
       });
     </script>
   </body>
