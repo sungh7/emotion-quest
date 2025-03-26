@@ -57,16 +57,21 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
     try {
       final tags = await _emotionService.getAllTags();
       
-      setState(() {
-        _availableTags = tags;
-      });
+      if (mounted) {
+        setState(() {
+          _availableTags = tags;
+        });
+        print('감정 세부 화면에 로드된 태그: $_availableTags');
+      }
     } catch (e) {
       print('태그 로드 오류: $e');
       
       // 에러 발생 시 빈 리스트라도 표시
-      setState(() {
-        _availableTags = [];
-      });
+      if (mounted) {
+        setState(() {
+          _availableTags = [];
+        });
+      }
     }
   }
 
@@ -199,12 +204,14 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
 
   // 태그 관리 화면으로 이동
   Future<void> _navigateToTagManagement() async {
+    print('태그 관리 화면으로 이동');
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TagManagementScreen()),
     );
     
     if (result == true) {
+      print('태그 관리 화면에서 돌아옴, 태그 다시 로드');
       // 태그 관리 화면에서 돌아왔을 때 태그 목록 다시 로드
       _loadTags();
     }
@@ -232,28 +239,49 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
             ],
           ),
         ),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 4.0,
-          children: _availableTags.map((tag) {
-            final isSelected = _selectedTags.contains(tag);
-            return FilterChip(
-              selected: isSelected,
-              label: Text(tag),
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedTags.add(tag);
-                  } else {
-                    _selectedTags.remove(tag);
-                  }
-                });
-              },
-              selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-              checkmarkColor: Theme.of(context).colorScheme.primary,
-            );
-          }).toList(),
-        ),
+        _availableTags.isEmpty
+          ? Center(
+              child: Column(
+                children: [
+                  Text(
+                    '사용 가능한 태그가 없습니다',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: _navigateToTagManagement,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('태그 추가하기'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              children: _availableTags.map((tag) {
+                final isSelected = _selectedTags.contains(tag);
+                return FilterChip(
+                  selected: isSelected,
+                  label: Text(tag),
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedTags.add(tag);
+                      } else {
+                        _selectedTags.remove(tag);
+                      }
+                    });
+                    print('선택된 태그: $_selectedTags');
+                  },
+                  selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  checkmarkColor: Theme.of(context).colorScheme.primary,
+                );
+              }).toList(),
+            ),
       ],
     );
   }

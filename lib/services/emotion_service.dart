@@ -63,10 +63,18 @@ class EmotionService extends ChangeNotifier {
   // 사용자 정의 태그 목록 가져오기
   List<String> get customTags => _customTags;
   
-  // 생성자에서 사용자 정의 감정 및 태그 로드
+  // 생성자에서 비동기 초기화 메서드 호출
   EmotionService() {
-    _loadCustomEmotions();
-    _loadCustomTags();
+    _initialize();
+  }
+  
+  // 비동기 초기화 메서드
+  Future<void> _initialize() async {
+    await _loadCustomEmotions();
+    await _loadCustomTags();
+    _isInitialized = true;
+    print('EmotionService 초기화 완료: 태그 ${_customTags.length}개, 감정 ${_customEmotions.length}개 로드됨');
+    notifyListeners();
   }
   
   // 사용자 정의 감정 로드
@@ -275,9 +283,11 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  // 모든 사용된 태그 목록 가져오기
+  // 모든 태그 가져오기 (로딩 중이면 대기)
   Future<List<String>> getAllTags() async {
-    await _loadCustomTags(); // 최신 태그 목록 로드
+    if (!_isInitialized) {
+      await _loadCustomTags();
+    }
     return allTags;
   }
   
@@ -397,9 +407,10 @@ class EmotionService extends ChangeNotifier {
       
       if (tagsList != null && tagsList.isNotEmpty) {
         _customTags = tagsList;
+        print('로드된 사용자 정의 태그: $_customTags');
+      } else {
+        print('저장된 사용자 정의 태그가 없습니다');
       }
-      
-      notifyListeners();
     } catch (e) {
       print('사용자 정의 태그 로드 오류: $e');
     }
@@ -410,6 +421,7 @@ class EmotionService extends ChangeNotifier {
     try {
       // 기본 태그 제외하고 사용자 정의 태그만 저장
       _customTags = tags.where((tag) => !_defaultTags.contains(tag)).toList();
+      print('저장할 사용자 정의 태그: $_customTags');
       
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_customTagsKey, _customTags);
