@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
+import '../screens/tag_management_screen.dart';
 
 class EmotionDetailScreen extends StatefulWidget {
   final String emotion;
@@ -33,7 +34,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   String? _recordingPath;
   
   // 태그 관련 상태
-  final List<String> _availableTags = ['업무', '가족', '건강', '친구', '학업', '취미', '기타'];
+  List<String> _availableTags = [];
   final Set<String> _selectedTags = {};
   
   // 미디어 파일 상태
@@ -42,11 +43,24 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   File? _audioFile;
 
   @override
+  void initState() {
+    super.initState();
+    _loadTags();
+  }
+
+  @override
   void dispose() {
     _detailsController.dispose();
     _diaryController.dispose();
     _audioRecorder.dispose();
     super.dispose();
+  }
+  
+  // 사용 가능한 태그 로드
+  Future<void> _loadTags() async {
+    setState(() {
+      _availableTags = _emotionService.allTags;
+    });
   }
 
   // 이미지 선택
@@ -158,32 +172,14 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
         _isLoading = true;
       });
 
-      // 미디어 파일 업로드
+      // 미디어 파일 업로드 (구현 필요)
       String? imageUrl;
       String? videoUrl;
       String? audioUrl;
       
-      // Firebase Storage에 파일 업로드
-      if (_imageFile != null) {
-        imageUrl = await _emotionService.uploadImage(_imageFile!);
-        if (imageUrl == null) {
-          throw Exception('이미지 업로드에 실패했습니다.');
-        }
-      }
-      
-      if (_videoFile != null) {
-        videoUrl = await _emotionService.uploadVideo(_videoFile!);
-        if (videoUrl == null) {
-          throw Exception('비디오 업로드에 실패했습니다.');
-        }
-      }
-      
-      if (_audioFile != null) {
-        audioUrl = await _emotionService.uploadAudio(_audioFile!);
-        if (audioUrl == null) {
-          throw Exception('오디오 업로드에 실패했습니다.');
-        }
-      }
+      // TODO: Firebase Storage에 파일 업로드 로직 구현
+      // 1. _imageFile, _videoFile, _audioFile이 있으면 각각 업로드
+      // 2. 업로드 후 URL을 받아서 저장
 
       EmotionRecord record = EmotionRecord(
         emotion: widget.emotion,
@@ -290,6 +286,27 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                             onSelected: (_) => _toggleTag(tag),
                             selectedColor: Theme.of(context).primaryColor.withOpacity(0.3),
                           )).toList(),
+                        ),
+                        
+                        // 사용자 정의 태그 추가 버튼
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const TagManagementScreen(),
+                              ),
+                            ).then((_) => _loadTags()),
+                            icon: const Icon(Icons.add_circle_outline, size: 16),
+                            label: const Text('태그 관리'),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         

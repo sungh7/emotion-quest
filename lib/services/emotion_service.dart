@@ -1,10 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:path/path.dart' as path;
-import 'package:uuid/uuid.dart';
 import '../models/emotion_record.dart';
 import 'firebase_service.dart';
 
@@ -14,10 +10,6 @@ class EmotionService extends ChangeNotifier {
   final List<EmotionRecord> _allRecords = [];
   final Map<String, List<EmotionRecord>> _recordsByDate = {};
   final Map<String, List<EmotionRecord>> _recordsByMonth = {};
-  
-  // Firebase Storage 인스턴스
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final Uuid _uuid = Uuid();
   
   // 마지막으로 조회한 기간
   DateTime? _lastFetchedMonth;
@@ -29,6 +21,7 @@ class EmotionService extends ChangeNotifier {
   // 로컬 저장소 키
   static const String _storageKey = 'emotion_records';
   static const String _customEmotionsKey = 'custom_emotions';
+  static const String _customTagsKey = 'custom_tags';
   
   // 기본 감정 목록
   final List<Map<String, String>> _defaultEmotions = [
@@ -44,6 +37,14 @@ class EmotionService extends ChangeNotifier {
   // 사용자 정의 감정 목록
   List<Map<String, String>> _customEmotions = [];
   
+  // 기본 태그 목록
+  final List<String> _defaultTags = [
+    '업무', '가족', '건강', '친구', '취미', '학업', '연애'
+  ];
+  
+  // 사용자 정의 태그 목록
+  List<String> _customTags = [];
+  
   // 모든 감정 목록 (기본 + 사용자 정의)
   List<Map<String, String>> get allEmotions => [..._defaultEmotions, ..._customEmotions];
   
@@ -53,9 +54,19 @@ class EmotionService extends ChangeNotifier {
   // 사용자 정의 감정 목록 가져오기
   List<Map<String, String>> get customEmotions => _customEmotions;
   
-  // 생성자에서 사용자 정의 감정 로드
+  // 모든 태그 목록 (기본 + 사용자 정의)
+  List<String> get allTags => [..._defaultTags, ..._customTags];
+  
+  // 기본 태그 목록 가져오기
+  List<String> get defaultTags => _defaultTags;
+  
+  // 사용자 정의 태그 목록 가져오기
+  List<String> get customTags => _customTags;
+  
+  // 생성자에서 사용자 정의 감정 및 태그 로드
   EmotionService() {
     _loadCustomEmotions();
+    _loadCustomTags();
   }
   
   // 사용자 정의 감정 로드
@@ -159,87 +170,6 @@ class EmotionService extends ChangeNotifier {
       return true;
     } catch (e) {
       print('사용자 정의 감정 수정 오류: $e');
-      return false;
-    }
-  }
-  
-  // 미디어 파일 업로드 (이미지)
-  Future<String?> uploadImage(File imageFile) async {
-    if (FirebaseService.currentUser == null) {
-      print('사용자가 로그인되어 있지 않습니다.');
-      return null;
-    }
-    
-    try {
-      final userId = FirebaseService.currentUser!.uid;
-      final fileName = '${_uuid.v4()}${path.extension(imageFile.path)}';
-      final ref = _storage.ref().child('users/$userId/images/$fileName');
-      
-      final uploadTask = ref.putFile(imageFile);
-      final snapshot = await uploadTask.whenComplete(() {});
-      
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      print('이미지 업로드 오류: $e');
-      return null;
-    }
-  }
-  
-  // 미디어 파일 업로드 (비디오)
-  Future<String?> uploadVideo(File videoFile) async {
-    if (FirebaseService.currentUser == null) {
-      print('사용자가 로그인되어 있지 않습니다.');
-      return null;
-    }
-    
-    try {
-      final userId = FirebaseService.currentUser!.uid;
-      final fileName = '${_uuid.v4()}${path.extension(videoFile.path)}';
-      final ref = _storage.ref().child('users/$userId/videos/$fileName');
-      
-      final uploadTask = ref.putFile(videoFile);
-      final snapshot = await uploadTask.whenComplete(() {});
-      
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      print('비디오 업로드 오류: $e');
-      return null;
-    }
-  }
-  
-  // 미디어 파일 업로드 (오디오)
-  Future<String?> uploadAudio(File audioFile) async {
-    if (FirebaseService.currentUser == null) {
-      print('사용자가 로그인되어 있지 않습니다.');
-      return null;
-    }
-    
-    try {
-      final userId = FirebaseService.currentUser!.uid;
-      final fileName = '${_uuid.v4()}${path.extension(audioFile.path)}';
-      final ref = _storage.ref().child('users/$userId/audios/$fileName');
-      
-      final uploadTask = ref.putFile(audioFile);
-      final snapshot = await uploadTask.whenComplete(() {});
-      
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      print('오디오 업로드 오류: $e');
-      return null;
-    }
-  }
-  
-  // 미디어 파일 삭제
-  Future<bool> deleteMediaFile(String fileUrl) async {
-    try {
-      final ref = _storage.refFromURL(fileUrl);
-      await ref.delete();
-      return true;
-    } catch (e) {
-      print('미디어 파일 삭제 오류: $e');
       return false;
     }
   }
@@ -470,5 +400,83 @@ class EmotionService extends ChangeNotifier {
   // 월 키 포맷
   String _formatMonthKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+  }
+  
+  // 사용자 정의 태그 로드
+  Future<void> _loadCustomTags() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = prefs.getStringList(_customTagsKey);
+      
+      if (jsonList != null && jsonList.isNotEmpty) {
+        _customTags = jsonList;
+      }
+    } catch (e) {
+      print('사용자 정의 태그 로드 오류: $e');
+    }
+  }
+  
+  // 사용자 정의 태그 저장
+  Future<void> saveCustomTags(List<String> tags) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 기본 태그 제외
+      _customTags = tags.where((tag) => !_defaultTags.contains(tag)).toList();
+      
+      await prefs.setStringList(_customTagsKey, _customTags);
+      notifyListeners();
+      return;
+    } catch (e) {
+      print('사용자 정의 태그 저장 오류: $e');
+    }
+  }
+  
+  // 사용자 정의 태그 추가
+  Future<bool> addCustomTag(String tag) async {
+    try {
+      // 이미 존재하는 태그인지 확인
+      if (allTags.contains(tag)) {
+        return false;
+      }
+      
+      // 새 태그 추가
+      _customTags.add(tag);
+      
+      // 저장하고 알림
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_customTagsKey, _customTags);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('사용자 정의 태그 추가 오류: $e');
+      return false;
+    }
+  }
+  
+  // 사용자 정의 태그 삭제
+  Future<bool> removeCustomTag(String tag) async {
+    try {
+      // 기본 태그는 삭제 불가
+      if (_defaultTags.contains(tag)) {
+        return false;
+      }
+      
+      final initialLength = _customTags.length;
+      _customTags.remove(tag);
+      
+      if (_customTags.length < initialLength) {
+        // 저장하고 알림
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(_customTagsKey, _customTags);
+        notifyListeners();
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('사용자 정의 태그 삭제 오류: $e');
+      return false;
+    }
   }
 } 

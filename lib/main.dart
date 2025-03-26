@@ -13,7 +13,6 @@ import 'screens/report_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/emotion_detail_screen.dart';
 import 'services/firebase_service.dart';
-import 'services/emotion_service.dart';
 
 Future<void> main() async {
   // Flutter 바인딩 초기화
@@ -109,248 +108,242 @@ class MyApp extends StatelessWidget {
     
     final themeService = Provider.of<ThemeService>(context);
     
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => ThemeService()),
-        ChangeNotifierProvider(create: (context) => EmotionService()),
-      ],
-      child: MaterialApp(
-        title: '감정 퀘스트',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF007AFF), // iOS 블루 색상
-            brightness: Brightness.light,
+    return MaterialApp(
+      title: '감정 퀘스트',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF007AFF), // iOS 블루 색상
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF2F2F7), // iOS 라이트 모드 배경색
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Color(0xFF000000),
+          titleTextStyle: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF000000),
+            letterSpacing: -0.5,
           ),
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFFF2F2F7), // iOS 라이트 모드 배경색
-          appBarTheme: const AppBarTheme(
-            elevation: 0,
-            centerTitle: true,
-            backgroundColor: Colors.transparent,
-            foregroundColor: Color(0xFF000000),
-            titleTextStyle: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF000000),
-              letterSpacing: -0.5,
-            ),
+        ),
+        cardTheme: CardTheme(
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey.withOpacity(0.2)),
           ),
-          cardTheme: CardTheme(
+          color: Colors.white,
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+          ),
+          titleMedium: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.5,
+          ),
+          bodyLarge: TextStyle(
+            fontSize: 17,
+            letterSpacing: -0.5,
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 15,
+            letterSpacing: -0.3,
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFFEFEFF4),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF007AFF),
+            foregroundColor: Colors.white,
             elevation: 0,
-            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.withOpacity(0.2)),
             ),
-            color: Colors.white,
-          ),
-          textTheme: const TextTheme(
-            titleLarge: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-            titleMedium: TextStyle(
-              fontSize: 17,
+            textStyle: const TextStyle(
+              fontSize: 16,
               fontWeight: FontWeight.w600,
-              letterSpacing: -0.5,
-            ),
-            bodyLarge: TextStyle(
-              fontSize: 17,
-              letterSpacing: -0.5,
-            ),
-            bodyMedium: TextStyle(
-              fontSize: 15,
               letterSpacing: -0.3,
             ),
           ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFFEFEFF4),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF007AFF),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF007AFF),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          iconTheme: const IconThemeData(
-            size: 24,
-            color: Color(0xFF007AFF),
-          ),
-          cupertinoOverrideTheme: const CupertinoThemeData(
-            primaryColor: Color(0xFF007AFF),
-            brightness: Brightness.light,
-          ),
-          // 페이지 전환 애니메이션 정의 (ThemeData 내부로 이동)
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.android: ZoomPageTransitionsBuilder(),
-              TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
-              TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-              TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-            },
-          ),
         ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF0A84FF), // iOS 다크모드 블루 색상
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF000000), // iOS 다크 모드 배경색
-          appBarTheme: const AppBarTheme(
-            elevation: 0,
-            centerTitle: true,
-            backgroundColor: Colors.transparent,
-            foregroundColor: Color(0xFFFFFFFF),
-            titleTextStyle: TextStyle(
-              fontSize: 17,
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF007AFF),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            textStyle: const TextStyle(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFFFFFFFF),
-              letterSpacing: -0.5,
-            ),
-          ),
-          cardTheme: CardTheme(
-            elevation: 0,
-            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey[800]!),
-            ),
-            color: const Color(0xFF1C1C1E), // iOS 다크모드 카드 색상
-          ),
-          textTheme: const TextTheme(
-            titleLarge: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-              color: Color(0xFFFFFFFF),
-            ),
-            titleMedium: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.5,
-              color: Color(0xFFFFFFFF),
-            ),
-            bodyLarge: TextStyle(
-              fontSize: 17,
-              letterSpacing: -0.5,
-              color: Color(0xFFFFFFFF),
-            ),
-            bodyMedium: TextStyle(
-              fontSize: 15,
               letterSpacing: -0.3,
-              color: Color(0xFFFFFFFF),
             ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFF2C2C2E),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0A84FF),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF0A84FF),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-          iconTheme: const IconThemeData(
-            size: 24,
-            color: Color(0xFF0A84FF),
-          ),
-          cupertinoOverrideTheme: const CupertinoThemeData(
-            primaryColor: Color(0xFF0A84FF),
-            brightness: Brightness.dark,
-          ),
-          // 다크 테마의 페이지 전환 애니메이션도 동일하게 설정
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-              TargetPlatform.android: ZoomPageTransitionsBuilder(),
-              TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
-              TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-              TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-            },
           ),
         ),
-        themeMode: themeService.themeMode,
-        initialRoute: isLoggedIn ? '/' : '/auth',
-        routes: {
-          '/': (context) => const HomeScreen(),
-          '/report': (context) => const ReportScreen(),
-          '/auth': (context) => const AuthScreen(),
-        },
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('ko', 'KR'),
-        ],
+        iconTheme: const IconThemeData(
+          size: 24,
+          color: Color(0xFF007AFF),
+        ),
+        cupertinoOverrideTheme: const CupertinoThemeData(
+          primaryColor: Color(0xFF007AFF),
+          brightness: Brightness.light,
+        ),
+        // 페이지 전환 애니메이션 정의 (ThemeData 내부로 이동)
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: ZoomPageTransitionsBuilder(),
+            TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0A84FF), // iOS 다크모드 블루 색상
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF000000), // iOS 다크 모드 배경색
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Color(0xFFFFFFFF),
+          titleTextStyle: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFFFFFFF),
+            letterSpacing: -0.5,
+          ),
+        ),
+        cardTheme: CardTheme(
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey[800]!),
+          ),
+          color: const Color(0xFF1C1C1E), // iOS 다크모드 카드 색상
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+            color: Color(0xFFFFFFFF),
+          ),
+          titleMedium: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.5,
+            color: Color(0xFFFFFFFF),
+          ),
+          bodyLarge: TextStyle(
+            fontSize: 17,
+            letterSpacing: -0.5,
+            color: Color(0xFFFFFFFF),
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 15,
+            letterSpacing: -0.3,
+            color: Color(0xFFFFFFFF),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF2C2C2E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0A84FF),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF0A84FF),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        iconTheme: const IconThemeData(
+          size: 24,
+          color: Color(0xFF0A84FF),
+        ),
+        cupertinoOverrideTheme: const CupertinoThemeData(
+          primaryColor: Color(0xFF0A84FF),
+          brightness: Brightness.dark,
+        ),
+        // 다크 테마의 페이지 전환 애니메이션도 동일하게 설정
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: ZoomPageTransitionsBuilder(),
+            TargetPlatform.fuchsia: ZoomPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
+      ),
+      themeMode: themeService.themeMode,
+      initialRoute: isLoggedIn ? '/' : '/auth',
+      routes: {
+        '/': (context) => const HomeScreen(),
+        '/report': (context) => const ReportScreen(),
+        '/auth': (context) => const AuthScreen(),
+      },
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ko', 'KR'),
+      ],
     );
   }
 }
