@@ -257,95 +257,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showEmotionDetailDialog(String emotion, String emoji) {
-    _detailsController.clear();
-    showDialog(
-      context: context,
-      builder: (context) {
-        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-        
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          backgroundColor: isDarkMode ? Colors.grey[850] : Colors.white,
-          title: Row(
-            children: [
-              Text(
-                emoji,
-                style: const TextStyle(fontSize: 24),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                emotion,
-                style: const TextStyle(fontSize: 20),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '감정을 더 자세히 설명해 주세요 (선택)',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _detailsController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: '예: 동료가 칭찬해 주어서 기분이 좋았다',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[50],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '기록하기 버튼을 누르면 바로 감정이 저장됩니다.',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                '취소',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: _isSaving ? null : () => _recordEmotion(emotion, emoji),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('기록하기'),
-            ),
-          ],
-        );
-      },
+    // 다이얼로그 대신 EmotionDetailScreen으로 이동
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmotionDetailScreen(
+          emotion: emotion,
+          emoji: emoji,
+        ),
+      ),
     );
   }
   
