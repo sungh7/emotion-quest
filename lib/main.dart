@@ -1,6 +1,7 @@
 import 'package:emotion_control/services/emotion_service.dart';
 import 'package:emotion_control/services/theme_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -14,6 +15,10 @@ import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // ThemeService 초기화
+  final themeService = ThemeService();
+  await themeService.initialize();
   
   bool firebaseInitialized = false;
   
@@ -29,7 +34,7 @@ void main() async {
 
   runApp(MyApp(
     firebaseInitialized: firebaseInitialized,
-    themeService: ThemeService(),
+    themeService: themeService,
   ));
 }
 
@@ -47,38 +52,23 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: themeService),
+        ChangeNotifierProvider(create: (_) => themeService),
+        Provider<bool>.value(value: firebaseInitialized),
         ChangeNotifierProvider(create: (_) => EmotionService()),
       ],
       child: Consumer<ThemeService>(
-        builder: (context, themeService, child) {
+        builder: (context, themeService, _) {
           final isDarkMode = themeService.isDarkMode;
           print('현재 테마 모드: ${isDarkMode ? 'Dark' : 'Light'}');
           
           return MaterialApp(
             title: '감정 퀘스트',
             debugShowCheckedModeBanner: false,
-            theme: ThemeData.light(
-              useMaterial3: true,
-            ).copyWith(
-              colorScheme: ColorScheme.light(
-                primary: Colors.teal[600] ?? Colors.teal,
-                secondary: Colors.tealAccent[700] ?? Colors.tealAccent,
-              ),
-            ),
-            darkTheme: ThemeData.dark(
-              useMaterial3: true,
-            ).copyWith(
-              colorScheme: ColorScheme.dark(
-                primary: Colors.teal[400] ?? Colors.teal,
-                secondary: Colors.tealAccent[400] ?? Colors.tealAccent,
-              ),
-            ),
+            theme: themeService.lightTheme,
+            darkTheme: themeService.darkTheme,
             themeMode: themeService.themeMode,
-            initialRoute: '/',
+            home: _getInitialScreen(),
             routes: {
-              '/': (context) => const HomeScreen(),
-              '/auth': (context) => const AuthScreen(),
               '/report': (context) => const ReportScreen(),
             },
             localizationsDelegates: const [
@@ -88,10 +78,16 @@ class MyApp extends StatelessWidget {
             ],
             supportedLocales: const [
               Locale('ko', 'KR'),
+              Locale('en', 'US'),
             ],
           );
         },
       ),
     );
+  }
+
+  Widget _getInitialScreen() {
+    // Implement the logic to determine the initial screen based on the firebaseInitialized state
+    return const HomeScreen();
   }
 }

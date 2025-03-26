@@ -11,6 +11,26 @@ class ThemeService extends ChangeNotifier {
   
   bool get isDarkMode => _themeMode == ThemeMode.dark;
   
+  // 라이트 테마 정의
+  ThemeData get lightTheme => ThemeData.light(
+    useMaterial3: true,
+  ).copyWith(
+    colorScheme: ColorScheme.light(
+      primary: Colors.teal[600] ?? Colors.teal,
+      secondary: Colors.tealAccent[700] ?? Colors.tealAccent,
+    ),
+  );
+  
+  // 다크 테마 정의
+  ThemeData get darkTheme => ThemeData.dark(
+    useMaterial3: true,
+  ).copyWith(
+    colorScheme: ColorScheme.dark(
+      primary: Colors.teal[400] ?? Colors.teal,
+      secondary: Colors.tealAccent[400] ?? Colors.tealAccent,
+    ),
+  );
+  
   /// 테마 서비스 초기화 및 저장된 테마 모드 로드
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
