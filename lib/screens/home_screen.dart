@@ -5,6 +5,7 @@ import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
 import '../screens/emotion_detail_screen.dart';
+import '../screens/custom_emotion_screen.dart';
 import '../services/theme_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,22 +16,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final EmotionService _emotionService = EmotionService();
   final TextEditingController _detailsController = TextEditingController();
   bool _isSaving = false;
   bool _isFirebaseInitialized = false;
-  
-  // 정의된 감정 목록
-  final List<Map<String, String>> emotions = [
-    {'emotion': '행복', 'emoji': '😊'},
-    {'emotion': '기쁨', 'emoji': '😄'},
-    {'emotion': '사랑', 'emoji': '🥰'},
-    {'emotion': '화남', 'emoji': '😡'},
-    {'emotion': '슬픔', 'emoji': '😢'},
-    {'emotion': '불안', 'emoji': '😰'},
-    {'emotion': '무기력', 'emoji': '😴'},
-    {'emotion': '지루함', 'emoji': '🙄'},
-  ];
   
   @override
   void initState() {
@@ -59,10 +47,19 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+  
+  // 사용자 정의 감정 화면으로 이동
+  void _navigateToCustomEmotionScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CustomEmotionScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeService = Provider.of<ThemeService>(context);
+    final emotionService = Provider.of<EmotionService>(context);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     bool isLoggedIn = false;
     
@@ -72,6 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
       print('로그인 상태 확인 오류: $e');
       isLoggedIn = false;
     }
+    
+    // 모든 감정 목록 (기본 + 사용자 정의)
+    final allEmotions = emotionService.allEmotions;
     
     return Scaffold(
       appBar: AppBar(
@@ -152,21 +152,47 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 20),
+                    
+                    // 사용자 정의 감정 관리 버튼
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            '감정 선택',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _navigateToCustomEmotionScreen,
+                            icon: const Icon(Icons.add_circle_outline),
+                            label: const Text('내 감정 추가'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
                     Expanded(
                       child: GridView.builder(
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           childAspectRatio: 1.5,
                         ),
-                        itemCount: emotions.length,
+                        itemCount: allEmotions.length,
                         itemBuilder: (context, index) {
+                          final emotion = allEmotions[index];
+                          final isCustom = index >= emotionService.defaultEmotions.length;
+                          
                           return EmotionButton(
-                            emotion: emotions[index]['emotion']!,
-                            emoji: emotions[index]['emoji']!,
+                            emotion: emotion['emotion']!,
+                            emoji: emotion['emoji']!,
+                            isCustom: isCustom,
                             onPressed: () => _showEmotionDetailDialog(
-                              emotions[index]['emotion']!,
-                              emotions[index]['emoji']!,
+                              emotion['emotion']!,
+                              emotion['emoji']!,
                             ),
                           );
                         },
@@ -198,167 +224,128 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(fontSize: 24),
               ),
               const SizedBox(width: 8),
-              Text(
-                emotion,
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(emotion),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '감정을 더 자세히 설명해 주세요 (선택)',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 12),
+              const Text('이 감정을 더 자세히 기록하시겠어요?'),
+              const SizedBox(height: 8),
               TextField(
                 controller: _detailsController,
+                decoration: const InputDecoration(
+                  labelText: '감정에 대한 설명 (선택)',
+                  border: OutlineInputBorder(),
+                ),
                 maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: '예: 동료가 칭찬해 주어서 기분이 좋았다',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[50],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '기록하기 버튼을 누르면 바로 감정이 저장됩니다.',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
-                ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                '취소',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('취소'),
             ),
-            ElevatedButton(
-              onPressed: _isSaving ? null : () => _recordEmotion(emotion, emoji),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('기록하기'),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _navigateToEmotionDetailScreen(emotion, emoji);
+              },
+              child: const Text('자세히 기록하기'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _saveEmotion(emotion, emoji);
+              },
+              child: const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         );
       },
     );
   }
-  
-  Future<void> _recordEmotion(String emotion, String emoji) async {
+
+  void _navigateToEmotionDetailScreen(String emotion, String emoji) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmotionDetailScreen(
+          emotion: emotion,
+          emoji: emoji,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveEmotion(String emotion, String emoji) async {
+    setState(() {
+      _isSaving = true;
+    });
+
     try {
-      setState(() {
-        _isSaving = true;
-      });
-      
-      if (FirebaseService.currentUser == null) {
-        // 로그인 화면으로 이동
-        await Navigator.pushNamed(context, '/auth');
-        
-        // 여전히 로그인되지 않았으면 중단
-        if (FirebaseService.currentUser == null) {
-          _showMessage('로그인 후 감정을 기록할 수 있습니다.', isError: true);
-          setState(() {
-            _isSaving = false;
-          });
-          return;
-        }
-      }
-      
-      // 다이얼로그 닫기
-      Navigator.of(context).pop();
-      
-      // 현재 시간으로 감정 기록 생성
       final record = EmotionRecord(
         emotion: emotion,
         emoji: emoji,
         timestamp: DateTime.now(),
         details: _detailsController.text.trim().isEmpty ? null : _detailsController.text.trim(),
       );
-      
-      // 감정 기록 저장
-      final success = await _emotionService.saveEmotionRecord(record);
-      
-      if (success) {
-        _showMessage('감정이 성공적으로 기록되었습니다.');
-      } else {
-        _showMessage('감정 기록 중 오류가 발생했습니다.', isError: true);
+
+      final emotionService = Provider.of<EmotionService>(context, listen: false);
+      final success = await emotionService.saveEmotionRecord(record);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('감정이 기록되었습니다')),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('감정 기록에 실패했습니다'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
-      print('감정 기록 오류: $e');
-      _showMessage('감정 기록 중 오류가 발생했습니다: $e', isError: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('오류: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
-  // 로그아웃 확인 다이얼로그
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('로그아웃'),
         content: const Text('정말 로그아웃 하시겠습니까?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () => Navigator.pop(context),
             child: const Text('취소'),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await FirebaseService.signOut();
-                if (mounted) {
-                  Navigator.of(context).pushReplacementNamed('/auth');
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('로그아웃 오류: $e')),
-                );
-              }
+            onPressed: () {
+              FirebaseService.signOut();
+              Navigator.pop(context);
             },
             child: const Text('로그아웃'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
   }

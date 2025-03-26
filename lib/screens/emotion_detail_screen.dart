@@ -158,14 +158,32 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
         _isLoading = true;
       });
 
-      // 미디어 파일 업로드 (구현 필요)
+      // 미디어 파일 업로드
       String? imageUrl;
       String? videoUrl;
       String? audioUrl;
       
-      // TODO: Firebase Storage에 파일 업로드 로직 구현
-      // 1. _imageFile, _videoFile, _audioFile이 있으면 각각 업로드
-      // 2. 업로드 후 URL을 받아서 저장
+      // Firebase Storage에 파일 업로드
+      if (_imageFile != null) {
+        imageUrl = await _emotionService.uploadImage(_imageFile!);
+        if (imageUrl == null) {
+          throw Exception('이미지 업로드에 실패했습니다.');
+        }
+      }
+      
+      if (_videoFile != null) {
+        videoUrl = await _emotionService.uploadVideo(_videoFile!);
+        if (videoUrl == null) {
+          throw Exception('비디오 업로드에 실패했습니다.');
+        }
+      }
+      
+      if (_audioFile != null) {
+        audioUrl = await _emotionService.uploadAudio(_audioFile!);
+        if (audioUrl == null) {
+          throw Exception('오디오 업로드에 실패했습니다.');
+        }
+      }
 
       EmotionRecord record = EmotionRecord(
         emotion: widget.emotion,

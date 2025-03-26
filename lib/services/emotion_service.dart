@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path/path.dart' as path;
+import 'package:uuid/uuid.dart';
 import '../models/emotion_record.dart';
 import 'firebase_service.dart';
 
@@ -10,6 +14,10 @@ class EmotionService extends ChangeNotifier {
   final List<EmotionRecord> _allRecords = [];
   final Map<String, List<EmotionRecord>> _recordsByDate = {};
   final Map<String, List<EmotionRecord>> _recordsByMonth = {};
+  
+  // Firebase Storage 인스턴스
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final Uuid _uuid = Uuid();
   
   // 마지막으로 조회한 기간
   DateTime? _lastFetchedMonth;
@@ -151,6 +159,87 @@ class EmotionService extends ChangeNotifier {
       return true;
     } catch (e) {
       print('사용자 정의 감정 수정 오류: $e');
+      return false;
+    }
+  }
+  
+  // 미디어 파일 업로드 (이미지)
+  Future<String?> uploadImage(File imageFile) async {
+    if (FirebaseService.currentUser == null) {
+      print('사용자가 로그인되어 있지 않습니다.');
+      return null;
+    }
+    
+    try {
+      final userId = FirebaseService.currentUser!.uid;
+      final fileName = '${_uuid.v4()}${path.extension(imageFile.path)}';
+      final ref = _storage.ref().child('users/$userId/images/$fileName');
+      
+      final uploadTask = ref.putFile(imageFile);
+      final snapshot = await uploadTask.whenComplete(() {});
+      
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      print('이미지 업로드 오류: $e');
+      return null;
+    }
+  }
+  
+  // 미디어 파일 업로드 (비디오)
+  Future<String?> uploadVideo(File videoFile) async {
+    if (FirebaseService.currentUser == null) {
+      print('사용자가 로그인되어 있지 않습니다.');
+      return null;
+    }
+    
+    try {
+      final userId = FirebaseService.currentUser!.uid;
+      final fileName = '${_uuid.v4()}${path.extension(videoFile.path)}';
+      final ref = _storage.ref().child('users/$userId/videos/$fileName');
+      
+      final uploadTask = ref.putFile(videoFile);
+      final snapshot = await uploadTask.whenComplete(() {});
+      
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      print('비디오 업로드 오류: $e');
+      return null;
+    }
+  }
+  
+  // 미디어 파일 업로드 (오디오)
+  Future<String?> uploadAudio(File audioFile) async {
+    if (FirebaseService.currentUser == null) {
+      print('사용자가 로그인되어 있지 않습니다.');
+      return null;
+    }
+    
+    try {
+      final userId = FirebaseService.currentUser!.uid;
+      final fileName = '${_uuid.v4()}${path.extension(audioFile.path)}';
+      final ref = _storage.ref().child('users/$userId/audios/$fileName');
+      
+      final uploadTask = ref.putFile(audioFile);
+      final snapshot = await uploadTask.whenComplete(() {});
+      
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      print('오디오 업로드 오류: $e');
+      return null;
+    }
+  }
+  
+  // 미디어 파일 삭제
+  Future<bool> deleteMediaFile(String fileUrl) async {
+    try {
+      final ref = _storage.refFromURL(fileUrl);
+      await ref.delete();
+      return true;
+    } catch (e) {
+      print('미디어 파일 삭제 오류: $e');
       return false;
     }
   }

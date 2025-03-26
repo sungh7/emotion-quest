@@ -6,12 +6,14 @@ class EmotionButton extends StatefulWidget {
   final String emotion;
   final String emoji;
   final VoidCallback onPressed;
+  final bool isCustom; // 사용자 정의 감정 여부
 
   const EmotionButton({
     Key? key,
     required this.emotion,
     required this.emoji,
     required this.onPressed,
+    this.isCustom = false,
   }) : super(key: key);
 
   @override
@@ -140,14 +142,27 @@ class _EmotionButtonState extends State<EmotionButton> with SingleTickerProvider
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        widget.emotion,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                          letterSpacing: -0.5,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (widget.isCustom)
+                            Icon(
+                              Icons.star,
+                              size: 14,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          if (widget.isCustom)
+                            const SizedBox(width: 4),
+                          Text(
+                            widget.emotion,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: widget.isCustom ? FontWeight.bold : FontWeight.normal,
+                              color: textColor,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
