@@ -8,6 +8,11 @@ import '../services/firebase_service.dart';
 import '../screens/tag_management_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:record/record.dart';
+import 'package:uuid/uuid.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class EmotionDetailScreen extends StatefulWidget {
   final String emotion;
@@ -23,33 +28,27 @@ class EmotionDetailScreen extends StatefulWidget {
   State<EmotionDetailScreen> createState() => _EmotionDetailScreenState();
 }
 
-class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
+class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerProviderStateMixin {
   final TextEditingController _detailsController = TextEditingController();
   final TextEditingController _diaryController = TextEditingController();
   
-  // 포커스 노드 추가
   final FocusNode _detailsFocusNode = FocusNode();
   final FocusNode _diaryFocusNode = FocusNode();
-  
-  bool _isLoading = false;
-  bool _isRecording = false;
   
   File? _imageFile;
   File? _videoFile;
   File? _audioFile;
   
-  late EmotionService _emotionService;
-  Set<String> _selectedTags = {};
-  List<String> _availableTags = [];
-  
-  // 이미지 선택을 위한 ImagePicker 인스턴스
-  final ImagePicker _picker = ImagePicker();
+  bool _isLoading = false;
+  bool _isSaving = false;
+  bool _isRecording = false;
+  List<Map<String, dynamic>> _availableTags = [];
+  List<String> _selectedTags = [];
   
   @override
   void initState() {
     super.initState();
-    _emotionService = Provider.of<EmotionService>(context, listen: false);
-    _loadTags();
+    _loadAvailableTags();
   }
   
   @override
@@ -62,13 +61,14 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
   }
   
   // 사용 가능한 태그 로드
-  Future<void> _loadTags() async {
+  Future<void> _loadAvailableTags() async {
     try {
-      final tags = await _emotionService.getAllTags();
+      final emotionService = Provider.of<EmotionService>(context, listen: false);
+      final tags = await emotionService.getAllTags();
       
       if (mounted) {
         setState(() {
-          _availableTags = tags;
+          _availableTags = tags.map((tag) => {'name': tag}).toList();
         });
         print('감정 세부 화면에 로드된 태그: $_availableTags');
       }
@@ -86,7 +86,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
 
   // 이미지 선택
   Future<void> _pickImage() async {
-    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _imageFile = File(pickedFile.path);
@@ -96,7 +96,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
 
   // 비디오 선택
   Future<void> _pickVideo() async {
-    final XFile? pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
+    final XFile? pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _videoFile = File(pickedFile.path);
@@ -134,7 +134,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
         tags: _selectedTags.toList(),
       );
 
-      await _emotionService.saveEmotionRecord(record);
+      await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
 
       if (mounted) {
         Navigator.pop(context, true); // 저장 성공 표시
@@ -196,7 +196,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
         diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
 
-      await _emotionService.saveEmotionRecord(record);
+      await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
 
       if (mounted) {
         Navigator.pop(context, true); // 저장 성공 표시
@@ -232,7 +232,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
     if (result == true) {
       print('태그 관리 화면에서 돌아옴, 태그 다시 로드');
       // 태그 관리 화면에서 돌아왔을 때 태그 목록 다시 로드
-      _loadTags();
+      _loadAvailableTags();
     }
   }
 
@@ -282,16 +282,16 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
               spacing: 8.0,
               runSpacing: 4.0,
               children: _availableTags.map((tag) {
-                final isSelected = _selectedTags.contains(tag);
+                final isSelected = _selectedTags.contains(tag['name']);
                 return FilterChip(
                   selected: isSelected,
-                  label: Text(tag),
+                  label: Text(tag['name']),
                   onSelected: (selected) {
                     setState(() {
                       if (selected) {
-                        _selectedTags.add(tag);
+                        _selectedTags.add(tag['name']);
                       } else {
-                        _selectedTags.remove(tag);
+                        _selectedTags.remove(tag['name']);
                       }
                     });
                     print('선택된 태그: $_selectedTags');
@@ -335,6 +335,15 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> {
                       child: Text(
                         widget.emoji,
                         style: const TextStyle(fontSize: 100),
+                      )
+                      .animate(
+                        onPlay: (controller) => controller.repeat(reverse: true), 
+                      )
+                      .scale(
+                        begin: const Offset(0.8, 0.8),
+                        end: const Offset(1.2, 1.2),
+                        duration: const Duration(seconds: 2),
+                        curve: Curves.easeInOut,
                       ),
                     ),
                   ),
