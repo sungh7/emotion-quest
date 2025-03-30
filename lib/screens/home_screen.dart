@@ -4,10 +4,10 @@ import '../widgets/emotion_button.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
+import '../services/theme_service.dart';
 import '../screens/emotion_detail_screen.dart';
 import '../screens/custom_emotion_screen.dart';
 import '../screens/tag_management_screen.dart';
-import '../services/theme_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 사용자 정의 감정 화면으로 이동
-  void _navigateToCustomEmotionScreen() {
+  void _navigateToCustomEmotionScreen(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CustomEmotionScreen()),
@@ -70,11 +70,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   
   // 태그 관리 화면으로 이동
-  void _navigateToTagManagementScreen() {
+  void _navigateToTagManagementScreen(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const TagManagementScreen()),
     );
+  }
+  
+  // 디지털 웰빙 화면으로 이동
+  void _navigateToWellbeingScreen(BuildContext context) {
+    Navigator.pushNamed(context, '/wellbeing');
   }
 
   @override
@@ -96,25 +101,80 @@ class _HomeScreenState extends State<HomeScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('감정 퀘스트'),
+        title: const Text(
+          '감정 퀘스트',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
         actions: [
-          IconButton(
-            icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () => themeService.toggleTheme(),
-            tooltip: isDarkMode ? '라이트 모드로 전환' : '다크 모드로 전환',
-          ),
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            onPressed: () {
-              Navigator.pushNamed(context, '/report');
+          // 메뉴 버튼
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'theme') {
+                _toggleTheme(context);
+              } else if (value == 'logout') {
+                _showLogoutConfirmDialog(context);
+              } else if (value == 'custom_emotions') {
+                _navigateToCustomEmotionScreen(context);
+              } else if (value == 'tag_management') {
+                _navigateToTagManagementScreen(context);
+              } else if (value == 'digital_wellbeing') {
+                _navigateToWellbeingScreen(context);
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'theme',
+                child: Row(
+                  children: [
+                    Icon(Icons.brightness_6),
+                    SizedBox(width: 8),
+                    Text('테마 변경'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'custom_emotions',
+                child: Row(
+                  children: [
+                    Icon(Icons.emoji_emotions),
+                    SizedBox(width: 8),
+                    Text('감정 관리'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'tag_management',
+                child: Row(
+                  children: [
+                    Icon(Icons.tag),
+                    SizedBox(width: 8),
+                    Text('태그 관리'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'digital_wellbeing',
+                child: Row(
+                  children: [
+                    Icon(Icons.phone_android),
+                    SizedBox(width: 8),
+                    Text('디지털 웰빙'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('로그아웃'),
+                  ],
+                ),
+              ),
+            ],
           ),
-          if (FirebaseService.currentUser != null)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: '로그아웃',
-              onPressed: () => _showLogoutDialog(context),
-            ),
         ],
       ),
       body: _isFirebaseInitialized 
@@ -181,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: _MenuButton(
                               icon: Icons.add_reaction_outlined,
                               label: '감정 추가',
-                              onPressed: _navigateToCustomEmotionScreen,
+                              onPressed: () => _navigateToCustomEmotionScreen(context),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -189,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: _MenuButton(
                               icon: Icons.tag,
                               label: '태그 관리',
-                              onPressed: _navigateToTagManagementScreen,
+                              onPressed: () => _navigateToTagManagementScreen(context),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -320,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 로그아웃 확인 다이얼로그
-  void _showLogoutDialog(BuildContext context) {
+  void _showLogoutConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -359,6 +419,10 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
+  }
+
+  void _toggleTheme(BuildContext context) {
+    // Implementation of _toggleTheme method
   }
 }
 

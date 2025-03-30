@@ -9,9 +9,12 @@ import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/emotion_detail_screen.dart';
+import 'screens/wellbeing_screen.dart';
 import 'dart:async';
 import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import './services/wellbeing_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,61 +35,58 @@ void main() async {
     print('Failed to initialize Firebase: $e');
   }
 
-  runApp(MyApp(
-    firebaseInitialized: firebaseInitialized,
-    themeService: themeService,
-  ));
+  // 앱 실행
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => EmotionService()),
+        ChangeNotifierProvider.value(value: themeService),
+        ChangeNotifierProvider(create: (context) => WellbeingService()),
+        Provider<bool>.value(value: firebaseInitialized),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  final bool firebaseInitialized;
-  final ThemeService themeService;
-  
-  const MyApp({
-    Key? key, 
-    required this.firebaseInitialized,
-    required this.themeService,
-  }) : super(key: key);
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => themeService),
-        Provider<bool>.value(value: firebaseInitialized),
-        ChangeNotifierProvider(create: (_) => EmotionService()),
-      ],
-      child: Consumer<ThemeService>(
-        builder: (context, themeService, _) {
-          final isDarkMode = themeService.isDarkMode;
-          print('현재 테마 모드: ${isDarkMode ? 'Dark' : 'Light'}');
-          
-          return MaterialApp(
-            title: '감정 퀘스트',
-            debugShowCheckedModeBanner: false,
-            theme: themeService.lightTheme,
-            darkTheme: themeService.darkTheme,
-            themeMode: themeService.themeMode,
-            home: _getInitialScreen(),
-            routes: {
-              '/report': (context) => const ReportScreen(),
-            },
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [
-              Locale('ko', 'KR'),
-              Locale('en', 'US'),
-            ],
-          );
-        },
-      ),
+    final firebaseInitialized = Provider.of<bool>(context);
+    
+    return Consumer<ThemeService>(
+      builder: (context, themeService, _) {
+        final isDarkMode = themeService.isDarkMode;
+        print('현재 테마 모드: ${isDarkMode ? 'Dark' : 'Light'}');
+        
+        return MaterialApp(
+          title: '감정 퀘스트',
+          debugShowCheckedModeBanner: false,
+          theme: themeService.lightTheme,
+          darkTheme: themeService.darkTheme,
+          themeMode: themeService.themeMode,
+          home: _getInitialScreen(firebaseInitialized),
+          routes: {
+            '/report': (context) => const ReportScreen(),
+            '/wellbeing': (context) => const WellbeingScreen(),
+          },
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('ko', 'KR'),
+            Locale('en', 'US'),
+          ],
+        );
+      },
     );
   }
 
-  Widget _getInitialScreen() {
+  Widget _getInitialScreen(bool firebaseInitialized) {
     // Implement the logic to determine the initial screen based on the firebaseInitialized state
     return const HomeScreen();
   }
