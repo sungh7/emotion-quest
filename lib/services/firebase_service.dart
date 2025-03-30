@@ -676,17 +676,15 @@ class FirebaseService {
       final date = DateTime.parse(dateStr);
       final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       
-      DocumentReference docRef = await firestore
+      // DocumentReference 가져오기
+      final docRef = firestore
           .collection('users')
           .doc(currentUser!.uid)
           .collection('wellbeing')
-          .doc(dateKey)
-          .set(data, SetOptions(merge: true))
-          .then((_) => firestore
-              .collection('users')
-              .doc(currentUser!.uid)
-              .collection('wellbeing')
-              .doc(dateKey));
+          .doc(dateKey);
+          
+      // 데이터 저장 (merge: true)
+      await docRef.set(data, SetOptions(merge: true));
           
       return {'success': true, 'id': docRef.id};
     } catch (e) {
@@ -750,8 +748,9 @@ class FirebaseService {
           .collection('users')
           .doc(currentUser!.uid)
           .collection('wellbeing')
-          .where(FieldPath.documentId, isGreaterThanOrEqualTo: startStr)
-          .where(FieldPath.documentId, isLessThanOrEqualTo: endStr)
+          .orderBy(FieldPath.documentId) // documentId로 정렬
+          .startAt([startStr])
+          .endAt([endStr])
           .get();
           
       return snapshot.docs.map((doc) => {
