@@ -18,6 +18,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'dart:async'; // TimeoutException을 위한 import 추가
 
 // 오디오 녹음을 위한 플랫폼별 조건부 임포트 추가는 웹 빌드에서 실패하므로 제거
 // import 'audio_helper.dart' if (dart.library.js) 'audio_helper_web.dart';
@@ -273,10 +274,22 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
           customMetadata: {'userId': userId},
         );
         
-        // 바이트 데이터 업로드
-        final uploadTask = await storageRef.putData(_webImageBytes!, metadata);
-        imageUrl = await storageRef.getDownloadURL();
-        print('웹 환경에서 이미지 업로드 완료: $imageUrl');
+        // 바이트 데이터 업로드 (타임아웃 추가)
+        try {
+          // 시간 제한 설정
+          final uploadTask = await storageRef.putData(_webImageBytes!, metadata)
+              .timeout(const Duration(seconds: 20), onTimeout: () {
+            print('이미지 업로드 타임아웃');
+            throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
+          });
+          
+          imageUrl = await storageRef.getDownloadURL();
+          print('웹 환경에서 이미지 업로드 완료: $imageUrl');
+        } catch (e) {
+          print('웹 이미지 업로드 오류: $e');
+          // 타임아웃이나 다른 오류가 발생하면 null 반환
+          imageUrl = null;
+        }
       } 
       // 모바일 환경에서 이미지 업로드
       else if (_imageFile != null) {
@@ -292,9 +305,20 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
           customMetadata: {'userId': userId},
         );
         
-        await storageRef.putFile(_imageFile!, metadata);
-        imageUrl = await storageRef.getDownloadURL();
-        print('모바일 환경에서 이미지 업로드 완료: $imageUrl');
+        try {
+          // 시간 제한 설정
+          await storageRef.putFile(_imageFile!, metadata)
+              .timeout(const Duration(seconds: 20), onTimeout: () {
+            print('이미지 업로드 타임아웃');
+            throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
+          });
+          
+          imageUrl = await storageRef.getDownloadURL();
+          print('모바일 환경에서 이미지 업로드 완료: $imageUrl');
+        } catch (e) {
+          print('모바일 이미지 업로드 오류: $e');
+          imageUrl = null;
+        }
       }
       
       if (_videoFile != null) {
@@ -303,10 +327,18 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
             .ref()
             .child('emotion_videos')
             .child(uniqueFileName);
-            
-        await storageRef.putFile(_videoFile!);
-        videoUrl = await storageRef.getDownloadURL();
-        print('비디오 업로드 완료: $videoUrl');
+        
+        try {
+          await storageRef.putFile(_videoFile!)
+              .timeout(const Duration(seconds: 30), onTimeout: () {
+            throw TimeoutException('비디오 업로드 시간이 초과되었습니다.');
+          });
+          videoUrl = await storageRef.getDownloadURL();
+          print('비디오 업로드 완료: $videoUrl');
+        } catch (e) {
+          print('비디오 업로드 오류: $e');
+          videoUrl = null;
+        }
       }
       
       if (_audioFile != null) {
@@ -315,10 +347,18 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
             .ref()
             .child('emotion_audios')
             .child(uniqueFileName);
-            
-        await storageRef.putFile(_audioFile!);
-        audioUrl = await storageRef.getDownloadURL();
-        print('오디오 업로드 완료: $audioUrl');
+        
+        try {
+          await storageRef.putFile(_audioFile!)
+              .timeout(const Duration(seconds: 20), onTimeout: () {
+            throw TimeoutException('오디오 업로드 시간이 초과되었습니다.');
+          });
+          audioUrl = await storageRef.getDownloadURL();
+          print('오디오 업로드 완료: $audioUrl');
+        } catch (e) {
+          print('오디오 업로드 오류: $e');
+          audioUrl = null;
+        }
       }
       
       return {
@@ -327,7 +367,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         'audioUrl': audioUrl,
       };
     } catch (e) {
-      print('미디어 업로드 오류: $e');
+      print('미디어 업로드 일반 오류: $e');
       // 오류 발생해도 계속 진행
       return {
         'imageUrl': null,
@@ -337,101 +377,70 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     }
   }
 
-  // 상세 정보 없이 감정 저장
-  Future<void> _saveWithoutDetails() async {
+  // 감정 기록 저장 (통합된 메서드)
+  Future<void> _saveEmotionRecord() async {
+    // 로딩 상태 설정
+    setState(() {
+      _isLoading = true;
+      _isSaving = true;
+    });
+
     try {
-      setState(() {
-        _isLoading = true;
-      });
-
-      EmotionRecord record = EmotionRecord(
-        emotion: widget.emotion,
-        emoji: widget.emoji,
-        timestamp: DateTime.now(),
-        tags: _selectedTags.toList(),
-      );
-
-      await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
-
-      if (mounted) {
-        Navigator.pop(context, true); // 저장 성공 표시
-      }
-    } catch (e) {
-      if (mounted) {
+      // 미디어 파일 있는 경우 업로드 시작
+      Map<String, String?> mediaUrls = {};
+      
+      if (_imageFile != null || _videoFile != null || _audioFile != null || _webImageBytes != null) {
+        // 업로드 진행 중 안내
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('감정 기록 중 오류가 발생했습니다: $e'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('미디어 파일을 업로드하는 중입니다. 잠시만 기다려주세요...'),
+            duration: Duration(seconds: 3),
           ),
         );
+        
+        // 미디어 업로드
+        mediaUrls = await _uploadMedia();
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  // 상세 정보와 함께 감정 저장
-  Future<void> _saveWithDetails() async {
-    // 더 이상 감정 설명이 필수가 아님
-    // 감정 일기 또는 태그가 있는 경우에도 저장 가능
-    // 모든 필드가 비어있는 경우에만 경고 메시지 표시
-    if (_detailsController.text.isEmpty && 
-        _diaryController.text.isEmpty && 
-        _selectedTags.isEmpty && 
-        _imageFile == null && 
-        _videoFile == null && 
-        _audioFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('감정 설명, 일기, 태그 중 하나 이상 입력해주세요')),
-      );
-      return;
-    }
-
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // 미디어 파일 업로드
-      Map<String, String?> mediaUrls = await _uploadMedia();
-      String? imageUrl = mediaUrls['imageUrl'];
-      String? videoUrl = mediaUrls['videoUrl'];
-      String? audioUrl = mediaUrls['audioUrl'];
-
+      
+      // EmotionRecord 생성
       EmotionRecord record = EmotionRecord(
         emotion: widget.emotion,
         emoji: widget.emoji,
         timestamp: DateTime.now(),
         details: _detailsController.text.isEmpty ? null : _detailsController.text.trim(),
         tags: _selectedTags.toList(),
-        imageUrl: imageUrl,
-        videoUrl: videoUrl,
-        audioUrl: audioUrl,
+        imageUrl: mediaUrls['imageUrl'],
+        videoUrl: mediaUrls['videoUrl'],
+        audioUrl: mediaUrls['audioUrl'],
         diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
 
+      // 감정 기록 저장
       await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
 
+      // 저장 성공 메시지
       if (mounted) {
-        Navigator.pop(context, true); // 저장 성공 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('감정이 저장되었습니다')),
+        );
+        
+        // 화면 닫기
+        Navigator.pop(context, true);
       }
     } catch (e) {
+      // 오류 처리
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('감정 기록 중 오류가 발생했습니다: $e'),
+            content: Text('감정 기록 저장 중 오류가 발생했습니다: $e'),
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
+        
+        // 로딩 상태 해제
         setState(() {
           _isLoading = false;
+          _isSaving = false;
         });
       }
     }
@@ -538,7 +547,19 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    _isSaving ? '감정 기록 저장 중...' : '로딩 중...',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               child: Column(
                 children: [
@@ -620,7 +641,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
                                 IconButton(
                                   icon: const Icon(Icons.photo),
                                   onPressed: _pickImage,
-                                  color: _imageFile != null ? Theme.of(context).primaryColor : Colors.grey,
+                                  color: (_imageFile != null || _webImageBytes != null) ? Theme.of(context).primaryColor : Colors.grey,
                                   iconSize: 32,
                                 ),
                                 const Text('사진'),
@@ -789,11 +810,12 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
                         ),
                         
                         const SizedBox(height: 24),
+                        // 저장 버튼 (통합)
                         SizedBox(
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: _saveWithDetails,
+                            onPressed: _saveEmotionRecord,
                             style: ElevatedButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(30),
@@ -802,27 +824,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
                               foregroundColor: Colors.white,
                             ),
                             child: const Text(
-                              '감정 기록 저장',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: _saveWithoutDetails,
-                            style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                            ),
-                            child: const Text(
-                              '간단히 저장',
+                              '감정 저장하기',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
