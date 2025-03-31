@@ -195,7 +195,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
       return;
     }
     
-    // 요일별 감정 점수 계산 (0-6: 월-일)
+    // 요일별 감정 점수 계산
     Map<int, List<double>> dayScores = {};
     
     // 감정 점수 매핑 (1-5 사이 값으로 변환)
@@ -211,8 +211,16 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
       '화남': 0.5,
     };
     
-    // 최근 기록 사용 (2주에서 모든 기록으로 변경)
-    final recentRecords = _records;
+    // 날짜별 정렬
+    _records.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    
+    // 최근 기록 사용 (최근 2주 이내 기록만)
+    final now = DateTime.now();
+    final twoWeeksAgo = now.subtract(Duration(days: 14));
+    final recentRecords = _records.where((r) => r.timestamp.isAfter(twoWeeksAgo)).toList();
+    
+    // 로그 추가
+    print('총 데이터 수: ${_records.length}, 최근 2주 데이터 수: ${recentRecords.length}');
     
     // 지난주와 이번주 평균 점수 계산용
     double lastWeekSum = 0;
@@ -220,22 +228,28 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     double thisWeekSum = 0;
     int thisWeekCount = 0;
     
+    // 요일별로 데이터 초기화 (0-6: 월-일)
+    for (int i = 0; i < 7; i++) {
+      dayScores[i] = [];
+    }
+    
     // 요일별 감정 분류
     for (var record in recentRecords) {
-      final score = emotionScores[record.emotion] ?? 3.0; // 기본값 3.0
-      final weekday = record.timestamp.weekday % 7; // 0-6 (일-토)
+      // 기본값 3.0, 미리 정의된 감정이 없는 경우에도 처리
+      final score = emotionScores[record.emotion] ?? 3.0;
       
-      if (!dayScores.containsKey(weekday)) {
-        dayScores[weekday] = [];
-      }
+      // 요일 계산 (1-7을 0-6으로 변환)
+      final weekday = record.timestamp.weekday - 1; // 0: 월요일, 6: 일요일
+      
       dayScores[weekday]!.add(score);
       
       // 지난주/이번주 구분
-      final isThisWeek = record.timestamp.isAfter(DateTime.now().subtract(Duration(days: 7)));
+      final weekAgo = now.subtract(Duration(days: 7));
+      final isThisWeek = record.timestamp.isAfter(weekAgo);
       if (isThisWeek) {
         thisWeekSum += score;
         thisWeekCount++;
-      } else {
+      } else if (record.timestamp.isAfter(twoWeeksAgo)) {
         lastWeekSum += score;
         lastWeekCount++;
       }
@@ -243,14 +257,15 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     
     // 요일별 평균 계산 및 FlSpot 생성
     _weeklyMoodSpots = [];
+    
+    print('요일별 데이터:');
     for (int i = 0; i < 7; i++) {
-      if (dayScores.containsKey(i) && dayScores[i]!.isNotEmpty) {
-        final avg = dayScores[i]!.reduce((a, b) => a + b) / dayScores[i]!.length;
-        _weeklyMoodSpots.add(FlSpot(i.toDouble(), avg));
-      } else {
-        // 데이터가 없는 요일은 null 처리하거나 평균값 사용
-        _weeklyMoodSpots.add(FlSpot(i.toDouble(), 3.0));
+      double avg = 3.0; // 기본값
+      if (dayScores[i]!.isNotEmpty) {
+        avg = dayScores[i]!.reduce((a, b) => a + b) / dayScores[i]!.length;
       }
+      _weeklyMoodSpots.add(FlSpot(i.toDouble(), avg));
+      print('${_getDayName(i)}: ${dayScores[i]!.length}개 데이터, 평균: $avg');
     }
     
     // 주간 변화 퍼센트 계산
@@ -271,7 +286,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     }
     
     // 요일별 패턴 찾기
-    if (dayScores.length >= 1) { // 최소 하루 이상의 데이터가 있으면 분석
+    if (dayScores.values.any((scores) => scores.isNotEmpty)) {
       int bestDay = -1;
       double bestScore = 0;
       int worstDay = -1;
@@ -675,8 +690,13 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   }
   
   Widget _buildLineChart(BuildContext context) {
-    // 실제 데이터로 차트 업데이트
-    final spots = _records.isEmpty ? _getDefaultSpots() : _weeklyMoodSpots;
+    // 주간 데이터가 없으면 기본 데이터 사용
+    final spots = _weeklyMoodSpots.isEmpty ? _getDefaultSpots() : _weeklyMoodSpots;
+    
+    // 로그 추가
+    print('차트 데이터 포인트: ${spots.length}개');
+    spots.forEach((spot) => print('데이터 포인트: (${spot.x}, ${spot.y})'));
+    
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final areaColor = isDarkMode ? Color(0xFF2A2A2A) : Color(0xFFF0F2F4);
     final lineColor = isDarkMode ? Colors.lightBlue : Color(0xFF637588);
@@ -685,63 +705,136 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LineChart(
-          LineChartData(
-            gridData: FlGridData(show: false),
-            titlesData: FlTitlesData(show: false),
-            borderData: FlBorderData(show: false),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                color: lineColor,
-                barWidth: 3,
-                isStrokeCapRound: true,
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, barData, index) {
-                    return FlDotCirclePainter(
-                      radius: 4,
-                      color: lineColor,
-                      strokeWidth: 2,
-                      strokeColor: isDarkMode ? Colors.black : Colors.white,
-                    );
-                  },
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: areaColor.withOpacity(0.5),
-                ),
-              ),
-            ],
-            lineTouchData: LineTouchData(
-              enabled: true,
-              touchTooltipData: LineTouchTooltipData(
-                tooltipBgColor: isDarkMode ? Colors.grey[800]! : Colors.white,
-                tooltipRoundedRadius: 8,
-                getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                  return touchedBarSpots.map((barSpot) {
-                    final sentiment = _getSentimentLabel(barSpot.y);
-                    return LineTooltipItem(
-                      sentiment,
-                      TextStyle(
-                        color: isDarkMode ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  }).toList();
+        SizedBox(
+          height: 180,
+          child: LineChart(
+            LineChartData(
+              gridData: FlGridData(
+                show: true,
+                horizontalInterval: 1,
+                drawVerticalLine: false,
+                getDrawingHorizontalLine: (value) {
+                  return FlLine(
+                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+                    strokeWidth: 1,
+                    dashArray: [5, 5],
+                  );
                 },
               ),
+              titlesData: FlTitlesData(
+                show: true,
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 25,
+                    getTitlesWidget: (value, meta) {
+                      const titles = ['월', '화', '수', '목', '금', '토', '일'];
+                      if (value >= 0 && value < titles.length) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            titles[value.toInt()],
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      }
+                      return Text('');
+                    },
+                  ),
+                ),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: false,
+                  ),
+                ),
+                topTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: false,
+                  ),
+                ),
+                rightTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: false,
+                  ),
+                ),
+              ),
+              borderData: FlBorderData(
+                show: false,
+              ),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: lineColor,
+                  barWidth: 3,
+                  isStrokeCapRound: true,
+                  dotData: FlDotData(
+                    show: true,
+                    getDotPainter: (spot, percent, barData, index) {
+                      return FlDotCirclePainter(
+                        radius: 4,
+                        color: lineColor,
+                        strokeWidth: 2,
+                        strokeColor: isDarkMode ? Colors.black : Colors.white,
+                      );
+                    },
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: areaColor.withOpacity(0.5),
+                  ),
+                ),
+              ],
+              lineTouchData: LineTouchData(
+                enabled: true,
+                touchTooltipData: LineTouchTooltipData(
+                  tooltipBgColor: isDarkMode ? Colors.grey[800]! : Colors.white,
+                  tooltipRoundedRadius: 8,
+                  getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                    return touchedBarSpots.map((barSpot) {
+                      final sentiment = _getSentimentLabel(barSpot.y);
+                      return LineTooltipItem(
+                        sentiment,
+                        TextStyle(
+                          color: isDarkMode ? Colors.white : Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
+              minX: 0,
+              maxX: 6,
+              minY: 0,
+              maxY: 5,
             ),
-            minX: 0,
-            maxX: 6,
-            minY: 0,
-            maxY: 6,
           ),
         ),
+        
+        // 아래 요일 레이블 표시
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Text('월', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('화', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('수', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('목', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('금', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('토', style: TextStyle(color: textColor, fontSize: 11)),
+              Text('일', style: TextStyle(color: textColor, fontSize: 11)),
+            ],
+          ),
+        ),
+        
         if (_trendInsight.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.only(top: 8),
             child: Text(
               _trendInsight,
               style: TextStyle(

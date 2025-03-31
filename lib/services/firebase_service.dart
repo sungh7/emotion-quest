@@ -262,8 +262,12 @@ class FirebaseService {
   
   /// 감정 기록 저장
   static Future<Map<String, dynamic>> saveEmotionRecord(Map<String, dynamic> record) async {
+    // 로그인하지 않은 경우에도 로컬에 저장
     if (currentUser == null) {
-      throw '로그인이 필요합니다.';
+      print("로그인되지 않은 상태에서 감정 기록 저장 시도 - 로컬에 저장합니다");
+      // 익명 사용자 ID 추가
+      record['userId'] = 'anonymous_${DateTime.now().millisecondsSinceEpoch}';
+      return await _saveEmotionRecordLocally(record);
     }
     
     if (isWeb && isJSFirebaseInitialized) {
@@ -304,27 +308,27 @@ class FirebaseService {
         
         rethrow;
       }
-    } else {
-      try {
-        DocumentReference docRef = await firestore
-            .collection('users')
-            .doc(currentUser!.uid)
-            .collection('emotions')
-            .add(record);
-            
-        return {'success': true, 'id': docRef.id};
-      } catch (e) {
-        print("감정 기록 저장 오류 (Firestore): $e");
-        
-        // 네트워크 오류인 경우 로컬에 저장
-        if (e.toString().contains('network') || 
-            e.toString().contains('timeout') ||
-            e.toString().contains('unavailable')) {
-          return await _saveEmotionRecordLocally(record);
-        }
-        
-        throw '감정 기록 저장 중 오류가 발생했습니다: $e';
+    }
+    
+    try {
+      DocumentReference docRef = await firestore
+          .collection('users')
+          .doc(currentUser!.uid)
+          .collection('emotions')
+          .add(record);
+          
+      return {'success': true, 'id': docRef.id};
+    } catch (e) {
+      print("감정 기록 저장 오류 (Firestore): $e");
+      
+      // 네트워크 오류인 경우 로컬에 저장
+      if (e.toString().contains('network') || 
+          e.toString().contains('timeout') ||
+          e.toString().contains('unavailable')) {
+        return await _saveEmotionRecordLocally(record);
       }
+      
+      throw '감정 기록 저장 중 오류가 발생했습니다: $e';
     }
   }
   

@@ -481,4 +481,87 @@ class EmotionService extends ChangeNotifier {
       return false;
     }
   }
+  
+  /// 감정 기록 새로고침 (강제 다시 로드)
+  Future<void> refreshEmotionRecords() async {
+    final records = await getEmotionRecords();
+    _allRecords.clear();
+    _allRecords.addAll(records);
+    _updateRecordMaps();
+    notifyListeners();
+  }
+  
+  /// 익명 상태에서 저장한 기록을 로그인한 계정으로 연결
+  Future<bool> linkAnonymousRecordsToUser() async {
+    try {
+      // 로그인 상태 확인
+      if (FirebaseService.currentUser == null) {
+        print('로그인되지 않아 기록 연결을 건너뜁니다.');
+        return false;
+      }
+      
+      // SharedPreferences 인스턴스 가져오기
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 저장된 기록 가져오기
+      List<String>? jsonRecords = prefs.getStringList('emotion_records');
+      if (jsonRecords == null || jsonRecords.isEmpty) {
+        print('연결할 로컬 기록이 없습니다.');
+        return false;
+      }
+      
+      // 저장할 레코드 목록
+      List<Map<String, dynamic>> recordsToSave = [];
+      List<String> remainingRecords = [];
+      bool hasAnonymousRecords = false;
+      
+      // 각 기록을 확인하고 익명 상태로 저장된 기록만 필터링
+      for (String jsonRecord in jsonRecords) {
+        Map<String, dynamic> record = jsonDecode(jsonRecord);
+        
+        // 익명 사용자 ID인지 확인
+        if (record['userId'] != null && record['userId'].toString().startsWith('anonymous_')) {
+          hasAnonymousRecords = true;
+          // 현재 사용자 ID로 변경
+          record['userId'] = FirebaseService.currentUser!.uid;
+          recordsToSave.add(record);
+        } else {
+          // 익명 기록이 아닌 것은 유지
+          remainingRecords.add(jsonRecord);
+        }
+      }
+      
+      // 익명 기록이 없으면 종료
+      if (!hasAnonymousRecords) {
+        print('연결할 익명 기록이 없습니다.');
+        return false;
+      }
+      
+      // 각 기록을 Firebase에 저장
+      int successCount = 0;
+      for (Map<String, dynamic> record in recordsToSave) {
+        try {
+          await FirebaseService.saveEmotionRecord(record);
+          successCount++;
+        } catch (e) {
+          print('기록 연결 중 오류: $e');
+          // 오류 발생 시 원래 기록 유지
+          remainingRecords.add(jsonEncode(record));
+        }
+      }
+      
+      // 남은 기록 저장 (Firebase 저장에 실패한 것들)
+      await prefs.setStringList('emotion_records', remainingRecords);
+      
+      // 결과 출력
+      print('$successCount/${recordsToSave.length}개의 익명 기록이 사용자 계정에 연결되었습니다.');
+      
+      // 기록 새로고침
+      await refreshEmotionRecords();
+      return successCount > 0;
+    } catch (e) {
+      print('익명 기록 연결 오류: $e');
+      return false;
+    }
+  }
 } 

@@ -20,6 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _detailsController = TextEditingController();
   bool _isSaving = false;
   bool _isFirebaseInitialized = false;
+  String _selectedEmotion = '';
+  String _selectedEmotionEmoji = '';
+  Set<String> _selectedTags = {};
   
   // 정의된 감정 목록
   final List<Map<String, String>> emotions = [
@@ -314,6 +317,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                     ),
+                    ElevatedButton.icon(
+                      onPressed: _selectedEmotion.isEmpty 
+                        ? null 
+                        : () {
+                            _saveEmotionRecord(_selectedEmotion, _selectedEmotionEmoji);
+                          },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.save),
+                      label: const Text('감정 저장하기'),
+                    ),
                   ],
                 ),
               )
@@ -334,43 +349,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  Future<void> _recordEmotion(String emotion, String emoji) async {
+  void _saveEmotionRecord(String emotion, String emoji) async {
+    if (emotion.isEmpty) {
+      _showMessage('감정을 선택해주세요.', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
     try {
-      setState(() {
-        _isSaving = true;
-      });
+      // 현재 시간 및 타임스탬프 생성
+      final now = DateTime.now();
       
-      if (FirebaseService.currentUser == null) {
-        // 로그인 화면으로 이동
-        await Navigator.pushNamed(context, '/auth');
-        
-        // 여전히 로그인되지 않았으면 중단
-        if (FirebaseService.currentUser == null) {
-          _showMessage('로그인 후 감정을 기록할 수 있습니다.', isError: true);
-          setState(() {
-            _isSaving = false;
-          });
-          return;
-        }
-      }
-      
-      // 다이얼로그 닫기
-      Navigator.of(context).pop();
-      
-      // 현재 시간으로 감정 기록 생성
+      // 감정 기록 생성
       final record = EmotionRecord(
         emotion: emotion,
         emoji: emoji,
-        timestamp: DateTime.now(),
-        details: _detailsController.text.trim().isEmpty ? null : _detailsController.text.trim(),
-      );
+        details: _detailsController.text.trim(), // 비어있어도 저장 허용
+        timestamp: now,
+        tags: List.from(_selectedTags),
+      ).toJson();
       
-      // 감정 기록 저장
-      final emotionService = Provider.of<EmotionService>(context, listen: false);
-      final success = await emotionService.saveEmotionRecord(record);
+      // 서비스를 통해 저장
+      final result = await FirebaseService.saveEmotionRecord(record);
       
-      if (success) {
-        _showMessage('감정이 성공적으로 기록되었습니다.');
+      if (result['success'] == true) {
+        // 입력 필드 초기화
+        _detailsController.clear();
+        setState(() {
+          _selectedEmotion = '';
+          _selectedEmotionEmoji = '';
+          _selectedTags = {};
+        });
+        
+        // 성공 메시지 표시
+        _showMessage('감정이 기록되었습니다.');
+        
+        // EmotionService 새로고침
+        Provider.of<EmotionService>(context, listen: false).refreshEmotionRecords();
       } else {
         _showMessage('감정 기록 중 오류가 발생했습니다.', isError: true);
       }

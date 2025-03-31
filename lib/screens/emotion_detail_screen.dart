@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,10 +10,13 @@ import '../screens/tag_management_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:record/record.dart';
+// import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter_animate/flutter_animate.dart';
+
+// 오디오 녹음을 위한 플랫폼별 조건부 임포트 추가는 웹 빌드에서 실패하므로 제거
+// import 'audio_helper.dart' if (dart.library.js) 'audio_helper_web.dart';
 
 class EmotionDetailScreen extends StatefulWidget {
   final String emotion;
@@ -104,20 +108,182 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     }
   }
 
-  // 오디오 녹음 시작 (현재 미구현)
+  // 오디오 녹음 시작
   Future<void> _startRecording() async {
-    // 녹음 기능 임시 비활성화
+    // 웹 환경에서는 녹음 기능 비활성화
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('웹 환경에서는 녹음 기능이 지원되지 않습니다. 모바일 앱을 이용해주세요.'))
+      );
+      return;
+    }
+    
+    // 웹 빌드에서 Record 클래스 사용 오류를 방지하기 위해 현재 기능 비활성화
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('녹음 기능이 현재 비활성화되어 있습니다.'))
+      const SnackBar(content: Text('녹음 기능이 현재 비활성화되어 있습니다. 향후 업데이트에서 지원될 예정입니다.'))
     );
+    
+    // 모바일 환경에서도 현재는 비활성화
+    return;
+    
+    // 아래 코드는 웹 빌드 오류로 주석 처리
+    /*
+    // 여기서부터는 모바일 환경에서만 실행됨
+    try {
+      // 다트 분석기가 아래 코드를 웹에서도 실행 가능하다고 판단하지만,
+      // if (kIsWeb) 체크로 실제로는 웹에서 실행되지 않음
+      if (!kIsWeb) {
+        final recorder = Record();
+        
+        // 권한 체크
+        if (await recorder.hasPermission()) {
+          // 임시 파일 경로 생성
+          final tempDir = await getTemporaryDirectory();
+          final tempPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          
+          // 녹음 시작
+          await recorder.start(
+            path: tempPath,
+            encoder: AudioEncoder.aacLc,
+            bitRate: 128000,
+            samplingRate: 44100,
+          );
+          
+          setState(() {
+            _isRecording = true;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('녹음이 시작되었습니다. 최대 1분간 녹음할 수 있습니다.'))
+          );
+          
+          // 1분 후 자동 중지
+          Future.delayed(const Duration(minutes: 1), () {
+            if (_isRecording) {
+              _stopRecording();
+            }
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('마이크 권한이 필요합니다.'))
+          );
+        }
+      }
+    } catch (e) {
+      print('녹음 시작 오류: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('녹음을 시작할 수 없습니다: $e'))
+      );
+    }
+    */
   }
 
-  // 오디오 녹음 중지 (현재 미구현)
+  // 오디오 녹음 중지
   Future<void> _stopRecording() async {
-    // 녹음 기능 임시 비활성화
+    // 상태 업데이트만 수행
     setState(() {
       _isRecording = false;
     });
+    return;
+    
+    // 아래 코드는 웹 빌드 오류로 주석 처리
+    /*
+    // 웹 환경이면 그냥 상태만 업데이트
+    if (kIsWeb) {
+      setState(() {
+        _isRecording = false;
+      });
+      return;
+    }
+
+    try {
+      // 여기서부터는 모바일 환경에서만 실행됨
+      if (!kIsWeb && _isRecording) {
+        final recorder = Record();
+        // 녹음 중지
+        final path = await recorder.stop();
+        
+        setState(() {
+          _isRecording = false;
+          
+          if (path != null) {
+            _audioFile = File(path);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('녹음이 완료되었습니다.'))
+            );
+          }
+        });
+      }
+    } catch (e) {
+      print('녹음 중지 오류: $e');
+      setState(() {
+        _isRecording = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('녹음을 중지할 수 없습니다: $e'))
+      );
+    }
+    */
+  }
+
+  // 미디어 파일 업로드 메서드 추가
+  Future<Map<String, String?>> _uploadMedia() async {
+    final String userId = FirebaseService.currentUser?.uid ?? 'anonymous';
+    String? imageUrl;
+    String? videoUrl;
+    String? audioUrl;
+    
+    try {
+      if (_imageFile != null) {
+        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final storageRef = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('emotion_images')
+            .child(uniqueFileName);
+            
+        await storageRef.putFile(_imageFile!);
+        imageUrl = await storageRef.getDownloadURL();
+        print('이미지 업로드 완료: $imageUrl');
+      }
+      
+      if (_videoFile != null) {
+        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        final storageRef = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('emotion_videos')
+            .child(uniqueFileName);
+            
+        await storageRef.putFile(_videoFile!);
+        videoUrl = await storageRef.getDownloadURL();
+        print('비디오 업로드 완료: $videoUrl');
+      }
+      
+      if (_audioFile != null) {
+        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final storageRef = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('emotion_audios')
+            .child(uniqueFileName);
+            
+        await storageRef.putFile(_audioFile!);
+        audioUrl = await storageRef.getDownloadURL();
+        print('오디오 업로드 완료: $audioUrl');
+      }
+      
+      return {
+        'imageUrl': imageUrl,
+        'videoUrl': videoUrl,
+        'audioUrl': audioUrl,
+      };
+    } catch (e) {
+      print('미디어 업로드 오류: $e');
+      // 오류 발생해도 계속 진행
+      return {
+        'imageUrl': null,
+        'videoUrl': null,
+        'audioUrl': null,
+      };
+    }
   }
 
   // 상세 정보 없이 감정 저장
@@ -179,10 +345,11 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         _isLoading = true;
       });
 
-      // 미디어 파일 업로드 (구현 필요)
-      String? imageUrl;
-      String? videoUrl;
-      String? audioUrl;
+      // 미디어 파일 업로드
+      Map<String, String?> mediaUrls = await _uploadMedia();
+      String? imageUrl = mediaUrls['imageUrl'];
+      String? videoUrl = mediaUrls['videoUrl'];
+      String? audioUrl = mediaUrls['audioUrl'];
 
       EmotionRecord record = EmotionRecord(
         emotion: widget.emotion,
