@@ -643,6 +643,29 @@ class FirebaseService {
       return [];
     }
   }
+
+  /// 감정 기록에서 이미지 데이터 처리
+  static String? processImageUrl(String? imageUrl) {
+    if (imageUrl == null) return null;
+    
+    // Base64 인코딩된 이미지는 그대로 사용
+    if (imageUrl.startsWith('data:image')) {
+      return imageUrl;
+    }
+    
+    // Storage URL이 있는 경우 (기존 방식)
+    return imageUrl;
+  }
+
+  /// 감정 기록 불러올 때 이미지 데이터가 있는지 확인하고 처리
+  static Map<String, dynamic> processEmotionRecord(Map<String, dynamic> record) {
+    // 이미지 URL이 있으면 처리
+    if (record.containsKey('imageUrl') && record['imageUrl'] != null) {
+      record['imageUrl'] = processImageUrl(record['imageUrl'] as String?);
+    }
+    
+    return record;
+  }
 }
 
 /// 웹 환경을 위한 User 구현

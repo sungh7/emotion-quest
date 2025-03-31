@@ -19,6 +19,9 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'dart:async'; // TimeoutException을 위한 import 추가
+import 'dart:convert'; // Base64 인코딩을 위한 import
+import 'package:image/image.dart' as img;
+import 'dart:math'; // max 함수 사용을 위한 import
 
 // 오디오 녹음을 위한 플랫폼별 조건부 임포트 추가는 웹 빌드에서 실패하므로 제거
 // import 'audio_helper.dart' if (dart.library.js) 'audio_helper_web.dart';
@@ -253,142 +256,116 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
   }
 
   // 미디어 파일 업로드 메서드 추가
-  Future<Map<String, String?>> _uploadMedia() async {
-    final String userId = FirebaseService.currentUser?.uid ?? 'anonymous';
-    String? imageUrl;
-    String? videoUrl;
-    String? audioUrl;
-    
+  Future<String?> _uploadMedia() async {
     try {
-      // 웹 환경에서 이미지 업로드
       if (kIsWeb && _webImageBytes != null) {
-        print('웹 환경에서 이미지 업로드 시작: 크기 ${_webImageBytes!.length} bytes');
-        
-        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}_${_webImageName ?? 'image.jpg'}';
-        final storageRef = firebase_storage.FirebaseStorage.instance
-            .ref()
-            .child('emotion_images')
-            .child(uniqueFileName);
-        
-        // 메타데이터 설정
-        final metadata = firebase_storage.SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {'userId': userId},
-        );
-        
-        // 바이트 데이터 업로드 (타임아웃 추가)
+        // Web 환경에서는 Base64 인코딩하여 저장
+        final bytes = _webImageBytes!;
+        final base64String = base64Encode(bytes);
+        final contentType = _webImageName!.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        return 'data:$contentType;base64,$base64String';
+      } 
+      else if (!kIsWeb && _imageFile != null) {
+        // 모바일에서 이미지 업로드
         try {
-          // 시간 제한 설정
-          print('이미지 업로드 중... (파일 이름: $uniqueFileName)');
-          final uploadTask = await storageRef.putData(_webImageBytes!, metadata)
-              .timeout(const Duration(seconds: 30), onTimeout: () {
-            print('이미지 업로드 타임아웃');
-            throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
-          });
+          final storage = firebase_storage.FirebaseStorage.instance;
+          final ref = storage.ref().child('emotion_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
           
-          // 업로드 상태 확인
-          print('이미지 업로드 완료: ${uploadTask.state}');
+          final uploadTask = await ref.putFile(_imageFile!).timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException('이미지 업로드 시간 초과'),
+          );
           
-          // URL 가져오기
-          imageUrl = await storageRef.getDownloadURL();
-          print('이미지 URL 획득: $imageUrl');
+          return await uploadTask.ref.getDownloadURL();
         } catch (e) {
-          print('웹 이미지 업로드 오류: $e');
-          // 타임아웃이나 다른 오류가 발생하면 null 반환
-          imageUrl = null;
+          print('이미지 업로드 오류: $e');
+          return null;
         }
       } 
-      // 모바일 환경에서 이미지 업로드
-      else if (_imageFile != null) {
-        print('모바일 환경에서 이미지 업로드 시작: ${_imageFile!.path}');
-        
-        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final storageRef = firebase_storage.FirebaseStorage.instance
-            .ref()
-            .child('emotion_images')
-            .child(uniqueFileName);
-        
-        // 메타데이터 설정
-        final metadata = firebase_storage.SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {'userId': userId},
-        );
-        
+      else if (_videoFile != null) {
+        // 비디오 업로드 (모바일만 해당)
         try {
-          // 시간 제한 설정
-          print('이미지 업로드 중... (파일 이름: $uniqueFileName)');
-          final uploadTask = await storageRef.putFile(_imageFile!, metadata)
-              .timeout(const Duration(seconds: 30), onTimeout: () {
-            print('이미지 업로드 타임아웃');
-            throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
-          });
+          final storage = firebase_storage.FirebaseStorage.instance;
+          final ref = storage.ref().child('emotion_videos/${DateTime.now().millisecondsSinceEpoch}.mp4');
           
-          // 업로드 상태 확인
-          print('이미지 업로드 완료: ${uploadTask.state}');
+          final uploadTask = await ref.putFile(_videoFile!).timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException('비디오 업로드 시간 초과'),
+          );
           
-          // URL 가져오기
-          imageUrl = await storageRef.getDownloadURL();
-          print('이미지 URL 획득: $imageUrl');
-        } catch (e) {
-          print('모바일 이미지 업로드 오류: $e');
-          imageUrl = null;
-        }
-      }
-      
-      if (_videoFile != null) {
-        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
-        final storageRef = firebase_storage.FirebaseStorage.instance
-            .ref()
-            .child('emotion_videos')
-            .child(uniqueFileName);
-        
-        try {
-          await storageRef.putFile(_videoFile!)
-              .timeout(const Duration(seconds: 30), onTimeout: () {
-            throw TimeoutException('비디오 업로드 시간이 초과되었습니다.');
-          });
-          videoUrl = await storageRef.getDownloadURL();
-          print('비디오 업로드 완료: $videoUrl');
+          return await uploadTask.ref.getDownloadURL();
         } catch (e) {
           print('비디오 업로드 오류: $e');
-          videoUrl = null;
+          return null;
         }
-      }
-      
-      if (_audioFile != null) {
-        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        final storageRef = firebase_storage.FirebaseStorage.instance
-            .ref()
-            .child('emotion_audios')
-            .child(uniqueFileName);
-        
+      } 
+      else if (_audioFile != null) {
         try {
-          await storageRef.putFile(_audioFile!)
-              .timeout(const Duration(seconds: 20), onTimeout: () {
-            throw TimeoutException('오디오 업로드 시간이 초과되었습니다.');
-          });
-          audioUrl = await storageRef.getDownloadURL();
-          print('오디오 업로드 완료: $audioUrl');
+          final storage = firebase_storage.FirebaseStorage.instance;
+          final ref = storage.ref().child('emotion_audios/${DateTime.now().millisecondsSinceEpoch}.m4a');
+          
+          final uploadTask = await ref.putFile(_audioFile!).timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException('오디오 업로드 시간 초과'),
+          );
+          
+          return await uploadTask.ref.getDownloadURL();
         } catch (e) {
           print('오디오 업로드 오류: $e');
-          audioUrl = null;
+          return null;
         }
       }
       
-      print('미디어 업로드 완료 - 결과: imageUrl=$imageUrl, videoUrl=$videoUrl, audioUrl=$audioUrl');
-      return {
-        'imageUrl': imageUrl,
-        'videoUrl': videoUrl,
-        'audioUrl': audioUrl,
-      };
+      return null;
     } catch (e) {
-      print('미디어 업로드 일반 오류: $e');
-      // 오류 발생해도 계속 진행
-      return {
-        'imageUrl': null,
-        'videoUrl': null,
-        'audioUrl': null,
-      };
+      print('미디어 업로드 오류: $e');
+      return null;
+    }
+  }
+
+  // 이미지 압축 메서드
+  Future<Uint8List> _compressImage(Uint8List bytes) async {
+    try {
+      // 이미지 크기가 500KB를 초과하는 경우에만 압축
+      if (bytes.length > 500 * 1024) {
+        print('이미지 압축 시작: 원본 크기 ${bytes.length} bytes');
+        
+        // 이미지 디코딩
+        final img.Image? original = img.decodeImage(bytes);
+        if (original == null) {
+          print('이미지 디코딩 실패');
+          return bytes;
+        }
+        
+        // 원본 크기 (최대 1024x1024로 제한)
+        int width = original.width;
+        int height = original.height;
+        
+        if (width > 1024 || height > 1024) {
+          final double ratio = 1024 / max(width, height);
+          width = (width * ratio).round();
+          height = (height * ratio).round();
+        }
+        
+        // 리사이즈 및 품질 조정하여 압축
+        final img.Image resized = img.copyResize(original, width: width, height: height);
+        final List<int> jpgData = img.encodeJpg(resized, quality: 70);
+        
+        // 결과 반환
+        final Uint8List compressedData = Uint8List.fromList(jpgData);
+        print('이미지 압축 완료: ${compressedData.length} bytes (${(compressedData.length / bytes.length * 100).round()}% 크기)');
+        return compressedData;
+      }
+      
+      // 이미 적절한 크기인 경우 압축 없이 반환
+      return bytes;
+    } catch (e) {
+      print('이미지 압축 오류: $e');
+      // 압축 실패 시 원본 반환 (단, 최대 1MB로 제한)
+      if (bytes.length > 1024 * 1024) {
+        return bytes.sublist(0, 1024 * 1024);
+      }
+      return bytes;
     }
   }
 
@@ -402,7 +379,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
 
     try {
       // 미디어 파일 있는 경우 업로드 시작
-      Map<String, String?> mediaUrls = {};
+      String? mediaUrl;
       
       if (_imageFile != null || _videoFile != null || _audioFile != null || _webImageBytes != null) {
         // 업로드 진행 중 안내
@@ -414,8 +391,8 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         );
         
         // 미디어 업로드
-        mediaUrls = await _uploadMedia();
-        print('미디어 업로드 결과: $mediaUrls');
+        mediaUrl = await _uploadMedia();
+        print('미디어 업로드 결과: $mediaUrl');
       }
       
       // EmotionRecord 생성
@@ -425,9 +402,9 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         timestamp: DateTime.now(),
         details: _detailsController.text.isEmpty ? null : _detailsController.text.trim(),
         tags: _selectedTags.toList(),
-        imageUrl: mediaUrls['imageUrl'],
-        videoUrl: mediaUrls['videoUrl'],
-        audioUrl: mediaUrls['audioUrl'],
+        imageUrl: mediaUrl,
+        videoUrl: _videoFile != null ? mediaUrl : null,
+        audioUrl: _audioFile != null ? mediaUrl : null,
         diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
 

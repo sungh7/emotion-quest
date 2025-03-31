@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
@@ -1422,21 +1424,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                   if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          record.imageUrl!,
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => 
-                            Container(
-                              height: 100,
-                              color: Colors.grey[300],
-                              child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
-                            ),
-                        ),
-                      ),
+                      child: buildRecordImage(record.imageUrl),
                     ),
                 ],
               ),
@@ -1609,21 +1597,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                           if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  record.imageUrl!,
-                                  height: 150,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => 
-                                    Container(
-                                      height: 100,
-                                      color: Colors.grey[300],
-                                      child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
-                                    ),
-                                ),
-                              ),
+                              child: buildRecordImage(record.imageUrl),
                             ),
                         ],
                       ),
@@ -1634,4 +1608,65 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
       ],
     );
   }
+}
+
+// 감정 이미지 위젯 (base64 이미지 지원)
+Widget buildRecordImage(String? imageUrl) {
+  if (imageUrl == null || imageUrl.isEmpty) {
+    return const SizedBox.shrink();
+  }
+  
+  // Base64 이미지인 경우
+  if (imageUrl.startsWith('data:image')) {
+    try {
+      // 'data:image/jpeg;base64,' 부분을 제거
+      final dataStart = imageUrl.indexOf(',') + 1;
+      final imageData = base64Decode(imageUrl.substring(dataStart));
+      
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          imageData,
+          height: 150,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => 
+            Container(
+              height: 100,
+              color: Colors.grey[300],
+              child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
+            ),
+        ),
+      );
+    } catch (e) {
+      print('Base64 이미지 디코딩 오류: $e');
+      return Container(
+        height: 100,
+        color: Colors.grey[300],
+        child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
+      );
+    }
+  }
+  
+  // 일반 URL 이미지인 경우 (Firebase Storage 등)
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: CachedNetworkImage(
+      imageUrl: imageUrl,
+      height: 150,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => Container(
+        height: 100,
+        color: Colors.grey[300],
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      errorWidget: (context, url, error) => 
+        Container(
+          height: 100,
+          color: Colors.grey[300],
+          child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
+        ),
+    ),
+  );
 } 

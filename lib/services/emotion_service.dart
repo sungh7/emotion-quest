@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import '../models/emotion_record.dart';
 import 'firebase_service.dart';
+import 'package:intl/intl.dart';
 
 /// 감정 기록 관리 서비스
 class EmotionService extends ChangeNotifier {
@@ -198,48 +199,92 @@ class EmotionService extends ChangeNotifier {
   Future<List<EmotionRecord>> getEmotionRecords() async {
     try {
       if (FirebaseService.currentUser != null) {
-        // Firebase에서 가져오기
-        final results = await FirebaseService.getEmotionRecords();
-        return results.map((record) => EmotionRecord.fromJson(record)).toList();
-      } else {
-        // 로컬에서 가져오기
-        final prefs = await SharedPreferences.getInstance();
+        // Firebase에서 기록 조회
+        final recordList = await FirebaseService.getEmotionRecords();
         
-        // 저장된 기록 가져오기
-        List<String>? jsonRecords = prefs.getStringList(_storageKey);
+        // 로컬 캐시 업데이트
+        _allRecords.clear();
         
-        if (jsonRecords == null || jsonRecords.isEmpty) {
-          return [];
+        for (var record in recordList) {
+          // 이미지 URL 처리
+          record = FirebaseService.processEmotionRecord(record);
+          
+          final emotionRecord = EmotionRecord.fromJson(record);
+          _allRecords.add(emotionRecord);
         }
         
-        // JSON에서 객체로 변환
-        return jsonRecords.map((jsonRecord) => 
-          EmotionRecord.fromJson(jsonDecode(jsonRecord))).toList();
+        // 날짜별 그룹화 저장
+        _updateRecordsByDate();
+        
+        return _allRecords;
+      } else {
+        // 로그인하지 않은 경우 로컬 저장소에서 조회
+        return _getLocalEmotionRecords();
       }
     } catch (e) {
-      print('감정 기록 가져오기 오류: $e');
+      print('감정 기록 조회 오류: $e');
       return [];
     }
   }
   
-  // 날짜별 맵 업데이트
-  void _updateRecordMaps() {
+  // 로컬 저장소에서 감정 기록 조회
+  Future<List<EmotionRecord>> _getLocalEmotionRecords() async {
+    try {
+      // 로컬에서 가져오기
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 저장된 기록 가져오기
+      List<String>? jsonRecords = prefs.getStringList(_storageKey);
+      
+      if (jsonRecords == null || jsonRecords.isEmpty) {
+        return [];
+      }
+      
+      // 로컬 캐시 업데이트
+      _allRecords.clear();
+      
+      // JSON에서 객체로 변환 및 이미지 URL 처리
+      for (String jsonRecord in jsonRecords) {
+        final Map<String, dynamic> recordData = jsonDecode(jsonRecord);
+        
+        // 이미지 URL 처리
+        final processedRecord = FirebaseService.processEmotionRecord(recordData);
+        
+        final emotionRecord = EmotionRecord.fromJson(processedRecord);
+        _allRecords.add(emotionRecord);
+      }
+      
+      // 날짜별 그룹화 저장
+      _updateRecordsByDate();
+      
+      return _allRecords;
+    } catch (e) {
+      print('로컬 감정 기록 조회 오류: $e');
+      return [];
+    }
+  }
+  
+  // 기록을 날짜별로 그룹화
+  void _updateRecordsByDate() {
     _recordsByDate.clear();
     _recordsByMonth.clear();
     
     for (final record in _allRecords) {
-      // 날짜별 그룹화
-      final dateStr = _formatDateKey(record.timestamp);
+      // 날짜별 그룹화 (YYYY-MM-DD 형식)
+      final dateStr = DateFormat('yyyy-MM-dd').format(record.timestamp);
+      
+      // 월별 그룹화 (YYYY-MM 형식)
+      final monthStr = DateFormat('yyyy-MM').format(record.timestamp);
+      
       if (!_recordsByDate.containsKey(dateStr)) {
         _recordsByDate[dateStr] = [];
       }
-      _recordsByDate[dateStr]!.add(record);
       
-      // 월별 그룹화
-      final monthStr = _formatMonthKey(record.timestamp);
       if (!_recordsByMonth.containsKey(monthStr)) {
         _recordsByMonth[monthStr] = [];
       }
+      
+      _recordsByDate[dateStr]!.add(record);
       _recordsByMonth[monthStr]!.add(record);
     }
   }
@@ -389,16 +434,6 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  // 날짜 키 포맷
-  String _formatDateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-  
-  // 월 키 포맷
-  String _formatMonthKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}';
-  }
-  
   // 사용자 정의 태그 로드
   Future<void> _loadCustomTags() async {
     try {
@@ -487,7 +522,7 @@ class EmotionService extends ChangeNotifier {
     final records = await getEmotionRecords();
     _allRecords.clear();
     _allRecords.addAll(records);
-    _updateRecordMaps();
+    _updateRecordsByDate();
     notifyListeners();
   }
   
@@ -561,6 +596,27 @@ class EmotionService extends ChangeNotifier {
       return successCount > 0;
     } catch (e) {
       print('익명 기록 연결 오류: $e');
+      return false;
+    }
+  }
+  
+  // 로컬 저장소에 감정 기록 저장하기
+  Future<bool> _saveLocalEmotionRecords() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // 객체를 JSON 문자열로 변환
+      final jsonRecords = _allRecords.map((record) => jsonEncode(record.toJson())).toList();
+      
+      // 로컬 저장소에 저장
+      await prefs.setStringList(_storageKey, jsonRecords);
+      
+      // 날짜별 그룹화 저장
+      _updateRecordsByDate();
+      
+      return true;
+    } catch (e) {
+      print('로컬 감정 기록 저장 오류: $e');
       return false;
     }
   }
