@@ -666,6 +666,37 @@ class FirebaseService {
     
     return record;
   }
+
+  /// Firebase Storage 보안 규칙 설정
+  static const String storageRules = '''
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      // 인증된 사용자만 접근 가능
+      allow read, write: if request.auth != null;
+      
+      // 이미지 파일 크기 제한 (50MB)
+      match /emotion_images/{imageId} {
+        allow write: if request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      }
+      
+      // 비디오 파일 크기 제한 (100MB)
+      match /emotion_videos/{videoId} {
+        allow write: if request.resource.size < 100 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+      }
+      
+      // 오디오 파일 크기 제한 (20MB)
+      match /emotion_audios/{audioId} {
+        allow write: if request.resource.size < 20 * 1024 * 1024
+                    && request.resource.contentType.matches('audio/.*');
+      }
+    }
+  }
+}
+''';
 }
 
 /// 웹 환경을 위한 User 구현

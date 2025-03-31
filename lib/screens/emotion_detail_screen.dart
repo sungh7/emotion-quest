@@ -258,35 +258,40 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
   // 미디어 파일 업로드 메서드 추가
   Future<String?> _uploadMedia() async {
     try {
-      if (kIsWeb && _webImageBytes != null) {
-        // Web 환경에서는 Base64 인코딩하여 저장
-        // 이미지 반드시 압축
-        final bytes = await _compressImage(_webImageBytes!);
-        final base64String = base64Encode(bytes);
-        
-        // Base64 이미지 크기 체크 (Firestore 제한: 1,048,487 bytes, 안전 마진 적용)
-        if (base64String.length > 1000000) {
-          print('경고: Base64 인코딩된 이미지가 여전히 너무 큽니다: ${base64String.length} bytes');
-          // 추가 압축 시도
-          final contentType = _webImageName!.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-          return null; // 너무 큰 이미지는 저장하지 않음
-        }
-        
-        final contentType = _webImageName!.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-        return 'data:$contentType;base64,$base64String';
-      } 
-      else if (!kIsWeb && _imageFile != null) {
-        // 모바일에서 이미지 업로드
+      if (_webImageBytes != null || _imageFile != null) {
+        // 웹과 모바일 모두 Firebase Storage 사용
         try {
           final storage = firebase_storage.FirebaseStorage.instance;
           final ref = storage.ref().child('emotion_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
           
-          final uploadTask = await ref.putFile(_imageFile!).timeout(
-            const Duration(seconds: 20),
+          firebase_storage.UploadTask uploadTask;
+          if (kIsWeb && _webImageBytes != null) {
+            // 웹 환경: Uint8List로 업로드
+            uploadTask = ref.putData(
+              _webImageBytes!,
+              firebase_storage.SettableMetadata(
+                contentType: 'image/jpeg',
+                customMetadata: {'uploaded_from': 'web'}
+              )
+            );
+          } else {
+            // 모바일 환경: File로 업로드
+            uploadTask = ref.putFile(_imageFile!);
+          }
+          
+          // 업로드 진행 상태 표시
+          uploadTask.snapshotEvents.listen((snapshot) {
+            final progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            print('업로드 진행률: ${progress.toStringAsFixed(1)}%');
+          });
+          
+          // 타임아웃 설정
+          final result = await uploadTask.timeout(
+            const Duration(seconds: 30),
             onTimeout: () => throw TimeoutException('이미지 업로드 시간 초과'),
           );
           
-          return await uploadTask.ref.getDownloadURL();
+          return await result.ref.getDownloadURL();
         } catch (e) {
           print('이미지 업로드 오류: $e');
           return null;
