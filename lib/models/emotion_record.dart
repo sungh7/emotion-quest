@@ -68,10 +68,10 @@ class EmotionRecord {
       if (userId != null) 'userId': userId,
       'tags': tags,
       'isCustomEmotion': isCustomEmotion,
-      if (imageUrl != null) 'imageUrl': imageUrl,
-      if (videoUrl != null) 'videoUrl': videoUrl,
-      if (audioUrl != null) 'audioUrl': audioUrl,
-      if (diaryContent != null) 'diaryContent': diaryContent,
+      'imageUrl': imageUrl,
+      'videoUrl': videoUrl,
+      'audioUrl': audioUrl,
+      'diaryContent': diaryContent,
     };
   }
 

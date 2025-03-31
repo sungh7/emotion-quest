@@ -262,6 +262,8 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     try {
       // 웹 환경에서 이미지 업로드
       if (kIsWeb && _webImageBytes != null) {
+        print('웹 환경에서 이미지 업로드 시작: 크기 ${_webImageBytes!.length} bytes');
+        
         final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}_${_webImageName ?? 'image.jpg'}';
         final storageRef = firebase_storage.FirebaseStorage.instance
             .ref()
@@ -277,14 +279,19 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         // 바이트 데이터 업로드 (타임아웃 추가)
         try {
           // 시간 제한 설정
+          print('이미지 업로드 중... (파일 이름: $uniqueFileName)');
           final uploadTask = await storageRef.putData(_webImageBytes!, metadata)
-              .timeout(const Duration(seconds: 20), onTimeout: () {
+              .timeout(const Duration(seconds: 30), onTimeout: () {
             print('이미지 업로드 타임아웃');
             throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
           });
           
+          // 업로드 상태 확인
+          print('이미지 업로드 완료: ${uploadTask.state}');
+          
+          // URL 가져오기
           imageUrl = await storageRef.getDownloadURL();
-          print('웹 환경에서 이미지 업로드 완료: $imageUrl');
+          print('이미지 URL 획득: $imageUrl');
         } catch (e) {
           print('웹 이미지 업로드 오류: $e');
           // 타임아웃이나 다른 오류가 발생하면 null 반환
@@ -293,6 +300,8 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
       } 
       // 모바일 환경에서 이미지 업로드
       else if (_imageFile != null) {
+        print('모바일 환경에서 이미지 업로드 시작: ${_imageFile!.path}');
+        
         final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final storageRef = firebase_storage.FirebaseStorage.instance
             .ref()
@@ -307,14 +316,19 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         
         try {
           // 시간 제한 설정
-          await storageRef.putFile(_imageFile!, metadata)
-              .timeout(const Duration(seconds: 20), onTimeout: () {
+          print('이미지 업로드 중... (파일 이름: $uniqueFileName)');
+          final uploadTask = await storageRef.putFile(_imageFile!, metadata)
+              .timeout(const Duration(seconds: 30), onTimeout: () {
             print('이미지 업로드 타임아웃');
             throw TimeoutException('이미지 업로드 시간이 초과되었습니다.');
           });
           
+          // 업로드 상태 확인
+          print('이미지 업로드 완료: ${uploadTask.state}');
+          
+          // URL 가져오기
           imageUrl = await storageRef.getDownloadURL();
-          print('모바일 환경에서 이미지 업로드 완료: $imageUrl');
+          print('이미지 URL 획득: $imageUrl');
         } catch (e) {
           print('모바일 이미지 업로드 오류: $e');
           imageUrl = null;
@@ -361,6 +375,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         }
       }
       
+      print('미디어 업로드 완료 - 결과: imageUrl=$imageUrl, videoUrl=$videoUrl, audioUrl=$audioUrl');
       return {
         'imageUrl': imageUrl,
         'videoUrl': videoUrl,
@@ -400,6 +415,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         
         // 미디어 업로드
         mediaUrls = await _uploadMedia();
+        print('미디어 업로드 결과: $mediaUrls');
       }
       
       // EmotionRecord 생성
@@ -415,17 +431,33 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
         diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
 
+      print('저장할 감정 기록: ${record.toString()}');
+      print('imageUrl: ${record.imageUrl}');
+
       // 감정 기록 저장
-      await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
+      final success = await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
+      
+      print('감정 기록 저장 결과: $success');
 
       // 저장 성공 메시지
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('감정이 저장되었습니다')),
+          SnackBar(
+            content: Text(success ? '감정이 저장되었습니다' : '저장 실패: Firestore에 저장되지 않았습니다.'),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
         );
         
         // 화면 닫기
-        Navigator.pop(context, true);
+        if (success) {
+          Navigator.pop(context, true);
+        } else {
+          // 저장 실패 시 로딩 상태 해제
+          setState(() {
+            _isLoading = false;
+            _isSaving = false;
+          });
+        }
       }
     } catch (e) {
       // 오류 처리
