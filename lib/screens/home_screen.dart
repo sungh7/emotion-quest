@@ -90,7 +90,12 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isLoggedIn = false;
     
     try {
-      isLoggedIn = _isFirebaseInitialized && FirebaseService.currentUser != null;
+      // 로그인 상태 검증 강화: 초기화 확인 + 현재 사용자 확인 + 사용자 이메일 확인
+      final currentUser = FirebaseService.currentUser;
+      isLoggedIn = _isFirebaseInitialized && 
+                   currentUser != null && 
+                   currentUser.email != null && 
+                   currentUser.email!.isNotEmpty;
     } catch (e) {
       print('로그인 상태 확인 오류: $e');
       isLoggedIn = false;
@@ -199,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Chip(
                             avatar: const Icon(Icons.person, size: 18),
                             label: Text(
-                              FirebaseService.currentUser!.email!.split('@')[0],
+                              FirebaseService.currentUser?.email?.split('@')[0] ?? '사용자',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
@@ -397,7 +402,12 @@ class _HomeScreenState extends State<HomeScreen> {
               try {
                 await FirebaseService.signOut();
                 if (mounted) {
-                  Navigator.of(context).pushReplacementNamed('/auth');
+                  // 로그인 상태를 강제로 갱신
+                  setState(() {
+                    // 로그아웃 후 상태 갱신
+                  });
+                  // 로그인 화면으로 이동
+                  Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
                 }
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -422,7 +432,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _toggleTheme(BuildContext context) {
-    // Implementation of _toggleTheme method
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    themeService.toggleTheme();
   }
 }
 

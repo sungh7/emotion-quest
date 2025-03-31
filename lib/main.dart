@@ -11,7 +11,6 @@ import 'screens/report_screen.dart';
 import 'screens/emotion_detail_screen.dart';
 import 'screens/wellbeing_screen.dart';
 import 'dart:async';
-import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './services/wellbeing_service.dart';
@@ -71,6 +70,7 @@ class MyApp extends StatelessWidget {
           routes: {
             '/report': (context) => const ReportScreen(),
             '/wellbeing': (context) => const WellbeingScreen(),
+            '/auth': (context) => const AuthScreen(),
           },
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,

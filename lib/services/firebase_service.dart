@@ -3,8 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
-import 'dart:js' as js;
-import 'dart:js_util';
+// 웹 환경에서만 js 라이브러리 import
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/emotion_record.dart';
@@ -115,73 +114,20 @@ class FirebaseService {
   
   /// JavaScript 함수 결과를 기다리기 위한 헬퍼 함수
   static Future<Map<String, dynamic>> _waitForJSResult(String resultVarName, {int maxAttempts = 30, int delayMs = 200}) async {
+    // 웹 환경이 아닐 경우 빈 결과 반환
+    if (!kIsWeb) {
+      return {'success': false, 'error': 'JavaScript is only available in web environment'};
+    }
+    
     int attempts = 0;
     
     while (attempts < maxAttempts) {
       attempts++;
       
       try {
-        final result = js.context[resultVarName];
-        
-        if (result != null) {
-          // JSON 객체로 직접 변환, JSON.stringify()로 감싸진 문자열이 아니라면 직접 사용
-          try {
-            if (result is String) {
-              return json.decode(result);
-            } else {
-              // JS 객체를 Dart Map으로 변환
-              final jsObject = result as js.JsObject;
-              // Dart Map으로 변환
-              Map<String, dynamic> dartMap = {};
-              
-              if (jsObject['success'] != null) {
-                dartMap['success'] = jsObject['success'] as bool;
-              }
-              
-              if (jsObject['error'] != null) {
-                dartMap['error'] = jsObject['error'].toString();
-              }
-              
-              if (jsObject['records'] != null) {
-                try {
-                  final jsRecords = jsObject['records'] as js.JsArray;
-                  final List<dynamic> records = List.from(jsRecords);
-                  dartMap['records'] = records;
-                } catch (e) {
-                  print('레코드 변환 오류: $e');
-                  dartMap['records'] = [];
-                }
-              }
-              
-              if (jsObject['user'] != null) {
-                try {
-                  final jsUser = jsObject['user'];
-                  dartMap['user'] = {
-                    'uid': jsUser['uid'],
-                    'email': jsUser['email'],
-                    'displayName': jsUser['displayName'],
-                  };
-                } catch (e) {
-                  print('사용자 정보 변환 오류: $e');
-                }
-              }
-              
-              // 기타 속성들 복사
-              if (jsObject['id'] != null) dartMap['id'] = jsObject['id'].toString();
-              if (jsObject['code'] != null) dartMap['code'] = jsObject['code'].toString();
-              if (jsObject['isLocal'] != null) dartMap['isLocal'] = jsObject['isLocal'] as bool;
-              
-              return dartMap;
-            }
-          } catch (e) {
-            print('${resultVarName} 결과 파싱 오류: $e');
-            // 오류가 발생해도 js.context[resultVarName]을 null로 설정하지 않음
-            throw FormatException('$e');
-          }
-        }
-        
-        print('${resultVarName} 대기 중... (시도: $attempts/$maxAttempts)');
-        await Future.delayed(Duration(milliseconds: delayMs));
+        // 여기에 웹 전용 로직이 있었지만, 네이티브 환경에서는 실행되지 않도록 함
+        // 웹 환경에서 사용할 경우 dart:js를 조건부로 임포트하여 구현 필요
+        return {'success': false, 'error': 'Method not implemented for this platform'};
       } catch (e) {
         print('${resultVarName} 처리 오류: $e');
         await Future.delayed(Duration(milliseconds: delayMs));
@@ -193,71 +139,41 @@ class FirebaseService {
   
   /// 웹 환경에서 JavaScript 함수 호출 및 결과 처리
   static Future<Map<String, dynamic>> _callJSFunction(String functionName, List<dynamic> args, String resultVariableName) async {
+    // 웹 환경이 아닐 경우 빈 결과 반환
+    if (!kIsWeb) {
+      return {'success': false, 'error': 'JavaScript is only available in web environment'};
+    }
+    
     try {
-      // JavaScript 함수 호출
-      js.context.callMethod(functionName, args);
-      
-      // 결과 대기
-      final jsResult = await _waitForJSResult(resultVariableName);
-      
-      // 결과 반환
-      return jsResult;
+      // 여기에 웹 전용 로직이 있었지만, 네이티브 환경에서는 실행되지 않도록 함
+      // 웹 환경에서 사용할 경우 dart:js를 조건부로 임포트하여 구현 필요
+      return {'success': false, 'error': 'Method not implemented for this platform'};
     } catch (e) {
-      print('JS 함수 호출 오류: $e');
-      throw Exception('JavaScript 함수 호출 중 오류 발생: $e');
+      print('$functionName 호출 오류: $e');
+      return {'success': false, 'error': '$e'};
     }
   }
   
   /// 이메일로 회원가입
   static Future<UserCredential> signUpWithEmail(String email, String password) async {
-    if (isWeb && isJSFirebaseInitialized) {
-      try {
-        final result = await _callJSFunction(
-          'signUpWithEmailJS', 
-          [email, password], 
-          'signupResult'
-        );
-        
-        if (result['success'] == true) {
-          return _createWebUserCredential(result['user']);
-        } else {
-          final errorMsg = result['error'] ?? '회원가입 실패';
-          print("회원가입 실패 메시지: $errorMsg");
-          
-          // 에러 유형에 따른 메시지 반환
-          if (errorMsg.contains('email-already-in-use')) {
-            throw '이미 사용 중인 이메일입니다.';
-          } else if (errorMsg.contains('weak-password')) {
-            throw '비밀번호가 너무 약합니다.';
-          } else if (errorMsg.contains('invalid-email')) {
-            throw '유효하지 않은 이메일 형식입니다.';
-          }
-          
-          throw errorMsg;
+    try {
+      // 모든 환경에서 Flutter Firebase SDK 사용
+      return await auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password
+      );
+    } catch (e) {
+      print("회원가입 오류: $e");
+      if (e is FirebaseAuthException) {
+        if (e.code == 'email-already-in-use') {
+          throw '이미 사용 중인 이메일입니다.';
+        } else if (e.code == 'weak-password') {
+          throw '비밀번호가 너무 약합니다.';
+        } else if (e.code == 'invalid-email') {
+          throw '유효하지 않은 이메일 형식입니다.';
         }
-      } catch (e) {
-        if (e is String) throw e;
-        throw '회원가입 중 오류가 발생했습니다: $e';
       }
-    } else {
-      try {
-        return await auth.createUserWithEmailAndPassword(
-          email: email,
-          password: password
-        );
-      } catch (e) {
-        print("회원가입 오류: $e");
-        if (e is FirebaseAuthException) {
-          if (e.code == 'email-already-in-use') {
-            throw '이미 사용 중인 이메일입니다.';
-          } else if (e.code == 'weak-password') {
-            throw '비밀번호가 너무 약합니다.';
-          } else if (e.code == 'invalid-email') {
-            throw '유효하지 않은 이메일 형식입니다.';
-          }
-        }
-        throw '회원가입 중 오류가 발생했습니다: $e';
-      }
+      throw '회원가입 중 오류가 발생했습니다: $e';
     }
   }
   
@@ -265,25 +181,16 @@ class FirebaseService {
   static Future<User?> signInWithEmail(String email, String password) async {
     try {
       if (kIsWeb && isJSFirebaseInitialized) {
-        // JavaScript로 로그인
-        js.context.callMethod('signInWithEmailJS', [email, password]);
-        
-        final result = await _waitForJSResult('loginResult');
-        
-        if (result['success'] == true) {
-          // Flutter Auth 상태 업데이트를 위해 대기
-          await Future.delayed(Duration(seconds: 1));
-          return auth.currentUser;
-        } else {
-          final errorCode = result['code'] ?? 'unknown';
-          final errorMsg = result['error'] ?? '로그인 실패';
-          
-          print('로그인 실패 - 코드: $errorCode, 메시지: $errorMsg');
-          
-          throw FirebaseAuthException(
-            code: errorCode,
-            message: errorMsg,
+        // 웹 환경에서는 직접 Firebase SDK 사용
+        try {
+          final userCredential = await auth.signInWithEmailAndPassword(
+            email: email,
+            password: password,
           );
+          return userCredential.user;
+        } catch (e) {
+          print('웹 환경에서 로그인 오류: $e');
+          rethrow;
         }
       } else {
         // Flutter SDK로 로그인
@@ -328,42 +235,25 @@ class FirebaseService {
   
   /// 로그아웃
   static Future<void> signOut() async {
-    if (isWeb && isJSFirebaseInitialized) {
-      try {
-        await _callJSFunction('signOutJS', [], 'signoutResult');
-      } catch (e) {
-        print("로그아웃 오류 (JavaScript): $e");
-        throw '로그아웃 중 오류가 발생했습니다: $e';
-      }
-    } else {
-      try {
-        await auth.signOut();
-      } catch (e) {
-        print("로그아웃 오류: $e");
-        throw '로그아웃 중 오류가 발생했습니다: $e';
-      }
+    try {
+      // Firebase에서 로그아웃
+      await auth.signOut();
+      
+      // 안전하게 _auth 참조도 초기화
+      _auth = null;
+      
+      print("로그아웃 성공");
+    } catch (e) {
+      print("로그아웃 오류: $e");
+      throw '로그아웃 중 오류가 발생했습니다: $e';
     }
   }
   
   /// 비밀번호 재설정
   static Future<void> resetPassword(String email) async {
     try {
-      if (kIsWeb && isJSFirebaseInitialized) {
-        // JavaScript로 비밀번호 재설정
-        js.context.callMethod('resetPasswordJS', [email]);
-        
-        final result = await _waitForJSResult('resetPasswordResult');
-        
-        if (result['success'] != true) {
-          throw FirebaseAuthException(
-            code: result['code'] ?? 'unknown',
-            message: result['error'] ?? '비밀번호 재설정 실패',
-          );
-        }
-      } else {
-        // Flutter SDK로 비밀번호 재설정
-        await auth.sendPasswordResetEmail(email: email);
-      }
+      // Flutter SDK로 비밀번호 재설정
+      await auth.sendPasswordResetEmail(email: email);
     } catch (e) {
       print('비밀번호 재설정 오류: $e');
       rethrow;
@@ -566,25 +456,12 @@ class FirebaseService {
   
   /// 현재 로그인한 사용자 정보 가져오기
   static User? get currentUser {
-    if (isWeb && isJSFirebaseInitialized) {
-      try {
-        final userJson = js.context.callMethod('getCurrentUserJS');
-        if (userJson == null) return null;
-        
-        // JavaScript에서 반환된 JSON을 파싱하여 사용
-        final userData = jsonDecode(userJson);
-        return _createUserFromJson(userData);
-      } catch (e) {
-        print("웹 사용자 정보 변환 오류: $e");
-        return null;
-      }
-    } else {
-      try {
-        return _auth?.currentUser;
-      } catch (e) {
-        print("현재 사용자 정보 가져오기 오류: $e");
-        return null;
-      }
+    try {
+      // 모든 환경에서 Firebase Auth 인스턴스에서 현재 사용자를 가져오기
+      return _auth?.currentUser;
+    } catch (e) {
+      print("현재 사용자 정보 가져오기 오류: $e");
+      return null;
     }
   }
   
@@ -748,7 +625,7 @@ class FirebaseService {
           .collection('users')
           .doc(currentUser!.uid)
           .collection('wellbeing')
-          .orderBy(FieldPath.documentId) // documentId로 정렬
+          .orderBy('date') // documentId 대신 date 필드로 정렬
           .startAt([startStr])
           .endAt([endStr])
           .get();
