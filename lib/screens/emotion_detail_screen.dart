@@ -260,8 +260,18 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     try {
       if (kIsWeb && _webImageBytes != null) {
         // Web 환경에서는 Base64 인코딩하여 저장
-        final bytes = _webImageBytes!;
+        // 이미지 반드시 압축
+        final bytes = await _compressImage(_webImageBytes!);
         final base64String = base64Encode(bytes);
+        
+        // Base64 이미지 크기 체크 (Firestore 제한: 1,048,487 bytes, 안전 마진 적용)
+        if (base64String.length > 1000000) {
+          print('경고: Base64 인코딩된 이미지가 여전히 너무 큽니다: ${base64String.length} bytes');
+          // 추가 압축 시도
+          final contentType = _webImageName!.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+          return null; // 너무 큰 이미지는 저장하지 않음
+        }
+        
         final contentType = _webImageName!.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
         return 'data:$contentType;base64,$base64String';
       } 
@@ -326,44 +336,54 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
   // 이미지 압축 메서드
   Future<Uint8List> _compressImage(Uint8List bytes) async {
     try {
-      // 이미지 크기가 500KB를 초과하는 경우에만 압축
-      if (bytes.length > 500 * 1024) {
-        print('이미지 압축 시작: 원본 크기 ${bytes.length} bytes');
-        
-        // 이미지 디코딩
-        final img.Image? original = img.decodeImage(bytes);
-        if (original == null) {
-          print('이미지 디코딩 실패');
-          return bytes;
-        }
-        
-        // 원본 크기 (최대 1024x1024로 제한)
-        int width = original.width;
-        int height = original.height;
-        
-        if (width > 1024 || height > 1024) {
-          final double ratio = 1024 / max(width, height);
-          width = (width * ratio).round();
-          height = (height * ratio).round();
-        }
-        
-        // 리사이즈 및 품질 조정하여 압축
-        final img.Image resized = img.copyResize(original, width: width, height: height);
-        final List<int> jpgData = img.encodeJpg(resized, quality: 70);
-        
-        // 결과 반환
-        final Uint8List compressedData = Uint8List.fromList(jpgData);
-        print('이미지 압축 완료: ${compressedData.length} bytes (${(compressedData.length / bytes.length * 100).round()}% 크기)');
-        return compressedData;
+      print('이미지 압축 시작: 원본 크기 ${bytes.length} bytes');
+      
+      // 이미지 디코딩
+      final img.Image? original = img.decodeImage(bytes);
+      if (original == null) {
+        print('이미지 디코딩 실패');
+        return bytes;
       }
       
-      // 이미 적절한 크기인 경우 압축 없이 반환
-      return bytes;
+      // 원본 크기 (최대 800x800로 제한 - 더 작게 조정)
+      int width = original.width;
+      int height = original.height;
+      
+      // 사이즈 제한 계산
+      if (width > 800 || height > 800) {
+        final double ratio = 800 / max(width, height);
+        width = (width * ratio).round();
+        height = (height * ratio).round();
+        print('이미지 크기 조정: $width x $height');
+      }
+      
+      // 리사이즈 및 품질 조정하여 압축
+      final img.Image resized = img.copyResize(original, width: width, height: height);
+      
+      // 품질을 50%로 낮추어 용량 축소
+      int quality = 50;
+      List<int> jpgData = img.encodeJpg(resized, quality: quality);
+      
+      // 최대 크기 제한 (700KB)
+      const int maxSize = 700 * 1024;
+      
+      // 필요한 경우 품질을 더 낮춰 파일 크기 제한 준수
+      while (jpgData.length > maxSize && quality > 10) {
+        quality -= 10;
+        print('이미지 품질 낮춤: $quality%');
+        jpgData = img.encodeJpg(resized, quality: quality);
+      }
+      
+      // 결과 반환
+      final Uint8List compressedData = Uint8List.fromList(jpgData);
+      print('이미지 압축 완료: ${compressedData.length} bytes (${(compressedData.length / bytes.length * 100).round()}% 크기)');
+      return compressedData;
     } catch (e) {
       print('이미지 압축 오류: $e');
-      // 압축 실패 시 원본 반환 (단, 최대 1MB로 제한)
-      if (bytes.length > 1024 * 1024) {
-        return bytes.sublist(0, 1024 * 1024);
+      // 압축 실패 시 원본을 최대 700KB로 제한
+      if (bytes.length > 700 * 1024) {
+        print('압축 실패, 원본 크기 제한: 700KB');
+        return bytes.sublist(0, 700 * 1024);
       }
       return bytes;
     }
