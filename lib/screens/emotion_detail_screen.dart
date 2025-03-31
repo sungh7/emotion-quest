@@ -14,6 +14,10 @@ import 'package:just_audio/just_audio.dart';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter_animate/flutter_animate.dart';
+// 웹 지원을 위한 추가 임포트
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 // 오디오 녹음을 위한 플랫폼별 조건부 임포트 추가는 웹 빌드에서 실패하므로 제거
 // import 'audio_helper.dart' if (dart.library.js) 'audio_helper_web.dart';
@@ -42,6 +46,10 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
   File? _imageFile;
   File? _videoFile;
   File? _audioFile;
+  
+  // 웹을 위한 추가 변수
+  Uint8List? _webImageBytes;
+  String? _webImageName;
   
   bool _isLoading = false;
   bool _isSaving = false;
@@ -90,11 +98,28 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
 
   // 이미지 선택
   Future<void> _pickImage() async {
-    final XFile? pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _imageFile = File(pickedFile.path);
-      });
+    // 웹 환경인지 체크
+    if (kIsWeb) {
+      final ImagePicker picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _webImageBytes = bytes;
+          _webImageName = pickedFile.name;
+        });
+        print('웹 환경에서 이미지 선택: ${pickedFile.name}, 크기: ${bytes.length} bytes');
+      }
+    } else {
+      // 모바일 환경에서의 기존 코드
+      final XFile? pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+        print('모바일 환경에서 이미지 선택: ${pickedFile.path}');
+      }
     }
   }
 
@@ -234,16 +259,42 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     String? audioUrl;
     
     try {
-      if (_imageFile != null) {
+      // 웹 환경에서 이미지 업로드
+      if (kIsWeb && _webImageBytes != null) {
+        final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}_${_webImageName ?? 'image.jpg'}';
+        final storageRef = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('emotion_images')
+            .child(uniqueFileName);
+        
+        // 메타데이터 설정
+        final metadata = firebase_storage.SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {'userId': userId},
+        );
+        
+        // 바이트 데이터 업로드
+        final uploadTask = await storageRef.putData(_webImageBytes!, metadata);
+        imageUrl = await storageRef.getDownloadURL();
+        print('웹 환경에서 이미지 업로드 완료: $imageUrl');
+      } 
+      // 모바일 환경에서 이미지 업로드
+      else if (_imageFile != null) {
         final uniqueFileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final storageRef = firebase_storage.FirebaseStorage.instance
             .ref()
             .child('emotion_images')
             .child(uniqueFileName);
-            
-        await storageRef.putFile(_imageFile!);
+        
+        // 메타데이터 설정
+        final metadata = firebase_storage.SettableMetadata(
+          contentType: 'image/jpeg',
+          customMetadata: {'userId': userId},
+        );
+        
+        await storageRef.putFile(_imageFile!, metadata);
         imageUrl = await storageRef.getDownloadURL();
-        print('이미지 업로드 완료: $imageUrl');
+        print('모바일 환경에서 이미지 업로드 완료: $imageUrl');
       }
       
       if (_videoFile != null) {
@@ -605,7 +656,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
                         ),
                         
                         // 선택된 미디어 미리보기
-                        if (_imageFile != null || _videoFile != null || _audioFile != null) ...[
+                        if (_imageFile != null || _videoFile != null || _audioFile != null || _webImageBytes != null) ...[
                           const SizedBox(height: 16),
                           const Text('첨부된 미디어', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
@@ -619,12 +670,44 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
                             child: ListView(
                               scrollDirection: Axis.horizontal,
                               children: [
-                                if (_imageFile != null)
+                                if (kIsWeb && _webImageBytes != null)
                                   Padding(
                                     padding: const EdgeInsets.only(right: 8),
                                     child: Stack(
                                       children: [
-                                        Image.file(_imageFile!, height: 84, width: 84, fit: BoxFit.cover),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: Image.memory(
+                                            _webImageBytes!,
+                                            height: 84,
+                                            width: 84,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 0,
+                                          top: 0,
+                                          child: IconButton(
+                                            icon: const Icon(Icons.close, size: 16),
+                                            onPressed: () => setState(() {
+                                              _webImageBytes = null;
+                                              _webImageName = null;
+                                            }),
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (!kIsWeb && _imageFile != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: Image.file(_imageFile!, height: 84, width: 84, fit: BoxFit.cover),
+                                        ),
                                         Positioned(
                                           right: 0,
                                           top: 0,

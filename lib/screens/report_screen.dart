@@ -1404,16 +1404,41 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             final record = events[index];
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: ListTile(
-                leading: Text(
-                  record.emoji,
-                  style: const TextStyle(fontSize: 32),
-                ),
-                title: Text(record.emotion),
-                subtitle: record.details != null ? Text(record.details!) : null,
-                trailing: Text(
-                  DateFormat('HH:mm').format(record.timestamp),
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    leading: Text(
+                      record.emoji,
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                    title: Text(record.emotion),
+                    subtitle: record.details != null ? Text(record.details!) : null,
+                    trailing: Text(
+                      DateFormat('HH:mm').format(record.timestamp),
+                    ),
+                  ),
+                  // 이미지가 있는 경우 표시
+                  if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          record.imageUrl!,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => 
+                            Container(
+                              height: 100,
+                              color: Colors.grey[300],
+                              child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
+                            ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             );
           },
@@ -1543,39 +1568,64 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                     final record = _filteredRecords[index];
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: ListTile(
-                        leading: Text(
-                          record.emoji,
-                          style: const TextStyle(fontSize: 32),
-                        ),
-                        title: Text(record.emotion),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (record.details != null)
-                              Text(
-                                record.details!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 4,
-                              children: record.tags.map((tag) => Chip(
-                                label: Text(tag, style: const TextStyle(fontSize: 10)),
-                                padding: EdgeInsets.zero,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              )).toList(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ListTile(
+                            leading: Text(
+                              record.emoji,
+                              style: const TextStyle(fontSize: 32),
                             ),
-                          ],
-                        ),
-                        trailing: Text(
-                          DateFormat('yyyy-MM-dd\nHH:mm').format(record.timestamp),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        isThreeLine: true,
+                            title: Text(record.emotion),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (record.details != null)
+                                  Text(
+                                    record.details!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 4,
+                                  children: record.tags.map((tag) => Chip(
+                                    label: Text(tag, style: const TextStyle(fontSize: 10)),
+                                    padding: EdgeInsets.zero,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  )).toList(),
+                                ),
+                              ],
+                            ),
+                            trailing: Text(
+                              DateFormat('yyyy-MM-dd\nHH:mm').format(record.timestamp),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            isThreeLine: true,
+                          ),
+                          // 이미지가 있는 경우 표시
+                          if (record.imageUrl != null && record.imageUrl!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  record.imageUrl!,
+                                  height: 150,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    Container(
+                                      height: 100,
+                                      color: Colors.grey[300],
+                                      child: Center(child: Icon(Icons.broken_image, color: Colors.grey[600])),
+                                    ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     );
                   },
