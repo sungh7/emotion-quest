@@ -9,6 +9,7 @@ import '../screens/custom_emotion_screen.dart';
 import '../screens/tag_management_screen.dart';
 import '../screens/quest_screen.dart';
 import '../services/quest_service.dart';
+import '../screens/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -42,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {
         _currentIndex = _tabController.index;
@@ -375,12 +376,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           controller: _tabController,
           tabs: const [
             Tab(
+              icon: Icon(Icons.fitness_center),
+              text: '감정 퀘스트',
+            ),
+            Tab(
               icon: Icon(Icons.edit_note),
               text: '감정 기록',
             ),
             Tab(
-              icon: Icon(Icons.fitness_center),
-              text: '감정 퀘스트',
+              icon: Icon(Icons.person),
+              text: '프로필',
             ),
           ],
         ),
@@ -388,6 +393,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       body: TabBarView(
         controller: _tabController,
         children: [
+          // 감정 퀘스트 탭
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  '감정에 맞는 퀘스트를 선택해보세요',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              Expanded(
+                child: _buildQuestEmotionGrid(),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+          
           // 감정 기록 탭
           Column(
             children: [
@@ -417,24 +440,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               const SizedBox(height: 16),
             ],
           ),
-          
-          // 감정 퀘스트 탭
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  '감정에 맞는 퀘스트를 선택해보세요',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              Expanded(
-                child: _buildQuestEmotionGrid(),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+
+          // 프로필 탭
+          const ProfileScreen(),
         ],
       ),
     );
