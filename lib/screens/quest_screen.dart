@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
 import '../models/quest.dart';
+import '../models/quest_progress.dart';
 import '../services/quest_service.dart';
 import '../services/game_service.dart';
 import 'package:confetti/confetti.dart';
@@ -46,13 +47,33 @@ class _QuestScreenState extends State<QuestScreen> {
       _currentQuest = quest;
       _isCompleted = false;
     });
+    
+    // 퀘스트 시작
+    if (quest != null) {
+      questService.startQuest(quest);
+    }
   }
 
   // 퀘스트 완료 처리
   Future<void> _completeQuest() async {
     if (_currentQuest == null || _isCompleted) return;
 
+    final questService = Provider.of<QuestService>(context, listen: false);
     final gameService = Provider.of<GameService>(context, listen: false);
+    
+    // 퀘스트 완료 처리
+    bool success = await questService.completeQuest();
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('퀘스트 완료 처리 중 오류가 발생했습니다.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
     
     // 경험치 추가
     if (gameService.userStats != null) {
@@ -77,9 +98,19 @@ class _QuestScreenState extends State<QuestScreen> {
       _isCompleted = true;
     });
   }
+  
+  // 퀘스트 재설정
+  void _resetQuest() {
+    final questService = Provider.of<QuestService>(context, listen: false);
+    questService.resetQuest();
+    _loadQuest();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final questService = Provider.of<QuestService>(context);
+    final progress = questService.currentProgress;
+    
     if (_currentQuest == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('퀘스트')),
@@ -91,9 +122,30 @@ class _QuestScreenState extends State<QuestScreen> {
       appBar: AppBar(
         title: const Text('감정 퀘스트'),
         actions: [
+          // 타이머 표시
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  questService.getElapsedTimeText(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadQuest,
+            onPressed: _resetQuest,
+            tooltip: '새로운 퀘스트',
           ),
         ],
       ),
@@ -103,7 +155,7 @@ class _QuestScreenState extends State<QuestScreen> {
             children: [
               // 감정 표시
               Container(
-                height: MediaQuery.of(context).size.height * 0.3,
+                height: MediaQuery.of(context).size.height * 0.25,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Theme.of(context).primaryColor.withOpacity(0.1),
@@ -127,6 +179,35 @@ class _QuestScreenState extends State<QuestScreen> {
                 ),
               ),
 
+              // 진행 상태 표시
+              if (progress != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('진행률: '),
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: progress.progress,
+                              minHeight: 8,
+                              backgroundColor: Colors.grey[300],
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('${(progress.progress * 100).toInt()}%'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               // 퀘스트 정보
               Expanded(
                 child: SingleChildScrollView(
@@ -134,7 +215,7 @@ class _QuestScreenState extends State<QuestScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 난이도 표시
+                      // 난이도 및 보상 표시
                       Row(
                         children: [
                           Container(
@@ -181,6 +262,44 @@ class _QuestScreenState extends State<QuestScreen> {
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 32),
+                      
+                      // 체크포인트 목록
+                      if (progress != null && progress.checkPoints.isNotEmpty) ...[
+                        const Text(
+                          '체크리스트',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...List.generate(
+                          progress.checkPoints.length,
+                          (index) => CheckboxListTile(
+                            value: progress.checkPoints[index].startsWith('✓'),
+                            onChanged: _isCompleted 
+                              ? null
+                              : (value) {
+                                  if (value == true) {
+                                    questService.completeCheckpoint(index);
+                                  }
+                                },
+                            title: Text(
+                              progress.checkPoints[index].replaceAll('✓ ', ''),
+                              style: TextStyle(
+                                decoration: progress.checkPoints[index].startsWith('✓')
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                                color: progress.checkPoints[index].startsWith('✓')
+                                  ? Colors.grey
+                                  : null,
+                              ),
+                            ),
+                            activeColor: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
 
                       // 퀘스트 완료 버튼
                       SizedBox(

@@ -1,18 +1,30 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:csv/csv.dart';
+import 'dart:async';
 import '../models/quest.dart';
+import '../models/quest_progress.dart';
+import '../services/firebase_service.dart';
 
 class QuestService extends ChangeNotifier {
   List<Quest> _quests = [];
   Map<String, List<Quest>> _questsByEmotion = {};
   bool _isLoading = false;
+  QuestProgress? _currentProgress;
+  Timer? _questTimer;
 
   // 게터
   List<Quest> get quests => _quests;
   Map<String, List<Quest>> get questsByEmotion => _questsByEmotion;
   bool get isLoading => _isLoading;
   List<String> get availableEmotions => _questsByEmotion.keys.toList();
+  QuestProgress? get currentProgress => _currentProgress;
+
+  @override
+  void dispose() {
+    _questTimer?.cancel();
+    super.dispose();
+  }
 
   // CSV 파일에서 퀘스트 데이터 로드
   Future<void> loadQuests() async {
@@ -107,5 +119,106 @@ class QuestService extends ChangeNotifier {
     if (questList == null || questList.isEmpty) return null;
     questList.shuffle();
     return questList.first;
+  }
+  
+  // 퀘스트 시작
+  void startQuest(Quest quest) {
+    _currentProgress = QuestProgress(
+      questId: quest.id,
+      startTime: DateTime.now(),
+      checkPoints: _generateCheckpoints(quest),
+    );
+    
+    // 타이머 시작
+    _startQuestTimer();
+    notifyListeners();
+  }
+  
+  // 난이도별 체크포인트 생성
+  List<String> _generateCheckpoints(Quest quest) {
+    final checkpoints = <String>[];
+    
+    // 퀘스트 난이도에 따라 체크포인트 생성
+    switch (quest.difficulty) {
+      case '상':
+        checkpoints.addAll([
+          '준비하기',
+          '시작하기',
+          '중간점검',
+          '마무리하기'
+        ]);
+        break;
+      case '중':
+        checkpoints.addAll([
+          '준비하기',
+          '수행하기',
+          '마무리하기'
+        ]);
+        break;
+      case '하':
+        checkpoints.addAll([
+          '시작하기',
+          '완료하기'
+        ]);
+        break;
+      default:
+        checkpoints.addAll([
+          '시작하기',
+          '완료하기'
+        ]);
+    }
+    
+    return checkpoints;
+  }
+  
+  // 타이머 시작
+  void _startQuestTimer() {
+    _questTimer?.cancel();
+    _questTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      notifyListeners();  // UI 업데이트를 위해
+    });
+  }
+  
+  // 체크포인트 완료
+  void completeCheckpoint(int index) {
+    if (_currentProgress == null) return;
+    _currentProgress!.completeCheckpoint(index);
+    notifyListeners();
+  }
+  
+  // 퀘스트 완료
+  Future<bool> completeQuest() async {
+    if (_currentProgress == null) return false;
+    
+    _currentProgress!.complete();
+    _questTimer?.cancel();
+    
+    // Firebase에 저장
+    try {
+      await FirebaseService.saveQuestProgress(_currentProgress!.toJson());
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('퀘스트 진행 상태 저장 실패: $e');
+      return false;
+    }
+  }
+  
+  // 경과 시간 텍스트 반환
+  String getElapsedTimeText() {
+    if (_currentProgress == null) return '00:00';
+    
+    final duration = _currentProgress!.elapsedTime;
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    
+    return '$minutes:$seconds';
+  }
+  
+  // 퀘스트 초기화
+  void resetQuest() {
+    _currentProgress = null;
+    _questTimer?.cancel();
+    notifyListeners();
   }
 } 

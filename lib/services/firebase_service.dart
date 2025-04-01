@@ -260,73 +260,78 @@ class FirebaseService {
   
   /// 감정 기록 저장
   static Future<Map<String, dynamic>> saveEmotionRecord(Map<String, dynamic> record) async {
-    // 로그인하지 않은 경우에도 로컬에 저장
-    if (currentUser == null) {
-      print("로그인되지 않은 상태에서 감정 기록 저장 시도 - 로컬에 저장합니다");
-      // 익명 사용자 ID 추가
-      record['userId'] = 'anonymous_${DateTime.now().millisecondsSinceEpoch}';
-      return await _saveEmotionRecordLocally(record);
-    }
-    
-    if (isWeb && isJSFirebaseInitialized) {
-      try {
-        final recordStr = jsonEncode(record);
-        
-        final result = await _callJSFunction(
-          'saveEmotionRecordJS',
-          [currentUser!.uid, recordStr],
-          'saveEmotionResult'
-        );
-        
-        if (result['success'] == true) {
-          return {'success': true, 'id': result['id']};
-        } else {
-          print("감정 기록 저장 오류 (JavaScript): ${result['error']}");
-          
-          // AdBlock 관련 오류일 가능성이 있는 경우 로컬에 저장
-          if (result['error'] != null && 
-             (result['error'].toString().contains('ERR_BLOCKED_BY_CLIENT') ||
-              result['error'].toString().contains('network error') ||
-              result['error'].toString().contains('failed to fetch'))) {
-            return await _saveEmotionRecordLocally(record);
-          }
-          
-          throw result['error'] ?? '감정 기록 저장 실패';
-        }
-      } catch (e) {
-        print("감정 기록 저장 오류: $e");
-        
-        // AdBlock 관련 오류이거나 통신 오류인 경우 로컬에 저장
-        if (e.toString().contains('timeout') || 
-            e.toString().contains('ERR_BLOCKED_BY_CLIENT') ||
-            e.toString().contains('network error') ||
-            e.toString().contains('failed to fetch')) {
-          return await _saveEmotionRecordLocally(record);
-        }
-        
-        rethrow;
-      }
-    }
-    
     try {
-      DocumentReference docRef = await firestore
-          .collection('users')
-          .doc(currentUser!.uid)
-          .collection('emotions')
-          .add(record);
-          
-      return {'success': true, 'id': docRef.id};
-    } catch (e) {
-      print("감정 기록 저장 오류 (Firestore): $e");
-      
-      // 네트워크 오류인 경우 로컬에 저장
-      if (e.toString().contains('network') || 
-          e.toString().contains('timeout') ||
-          e.toString().contains('unavailable')) {
+      // 로그인하지 않은 경우에도 로컬에 저장
+      if (currentUser == null) {
+        print("로그인되지 않은 상태에서 감정 기록 저장 시도 - 로컬에 저장합니다");
+        // 익명 사용자 ID 추가
+        record['userId'] = 'anonymous_${DateTime.now().millisecondsSinceEpoch}';
         return await _saveEmotionRecordLocally(record);
       }
       
-      throw '감정 기록 저장 중 오류가 발생했습니다: $e';
+      if (isWeb && isJSFirebaseInitialized) {
+        try {
+          final recordStr = jsonEncode(record);
+          
+          final result = await _callJSFunction(
+            'saveEmotionRecordJS',
+            [currentUser!.uid, recordStr],
+            'saveEmotionResult'
+          );
+          
+          if (result['success'] == true) {
+            return {'success': true, 'id': result['id']};
+          } else {
+            print("감정 기록 저장 오류 (JavaScript): ${result['error']}");
+            
+            // AdBlock 관련 오류일 가능성이 있는 경우 로컬에 저장
+            if (result['error'] != null && 
+               (result['error'].toString().contains('ERR_BLOCKED_BY_CLIENT') ||
+                result['error'].toString().contains('network error') ||
+                result['error'].toString().contains('failed to fetch'))) {
+              return await _saveEmotionRecordLocally(record);
+            }
+            
+            throw result['error'] ?? '감정 기록 저장 실패';
+          }
+        } catch (e) {
+          print("감정 기록 저장 오류: $e");
+          
+          // AdBlock 관련 오류이거나 통신 오류인 경우 로컬에 저장
+          if (e.toString().contains('timeout') || 
+              e.toString().contains('ERR_BLOCKED_BY_CLIENT') ||
+              e.toString().contains('network error') ||
+              e.toString().contains('failed to fetch')) {
+            return await _saveEmotionRecordLocally(record);
+          }
+          
+          rethrow;
+        }
+      }
+      
+      try {
+        DocumentReference docRef = await firestore
+            .collection('users')
+            .doc(currentUser!.uid)
+            .collection('emotions')
+            .add(record);
+            
+        return {'success': true, 'id': docRef.id};
+      } catch (e) {
+        print("감정 기록 저장 오류 (Firestore): $e");
+        
+        // 네트워크 오류인 경우 로컬에 저장
+        if (e.toString().contains('network') || 
+            e.toString().contains('timeout') ||
+            e.toString().contains('unavailable')) {
+          return await _saveEmotionRecordLocally(record);
+        }
+        
+        throw '감정 기록 저장 중 오류가 발생했습니다: $e';
+      }
+    } catch (e) {
+      print("감정 기록 저장 오류: $e");
+      rethrow;
     }
   }
   
@@ -695,6 +700,73 @@ service firebase.storage {
   }
 }
 ''';
+
+  /// Firebase에 퀘스트 진행 상태 저장
+  static Future<Map<String, dynamic>> saveQuestProgress(Map<String, dynamic> progress) async {
+    try {
+      // 사용자 UID 확인
+      final user = auth.currentUser;
+      if (user == null) {
+        return {'success': false, 'error': 'User not logged in'};
+      }
+
+      // questId 필드 확인
+      if (!progress.containsKey('questId')) {
+        return {'success': false, 'error': 'Missing questId field'};
+      }
+
+      // 컬렉션 경로 설정
+      final questsRef = firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('quest_progress');
+      
+      // 문서 ID는 questId와 timestamp 조합으로 생성
+      final docId = '${progress['questId']}_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // 저장 시간 추가
+      progress['savedAt'] = FieldValue.serverTimestamp();
+      progress['userId'] = user.uid;
+      
+      // Firestore에 저장
+      await questsRef.doc(docId).set(progress);
+      
+      return {'success': true, 'docId': docId};
+    } catch (e) {
+      print('퀘스트 진행 상태 저장 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Firebase에서 사용자의 퀘스트 진행 기록 로드
+  static Future<List<Map<String, dynamic>>> loadQuestProgress() async {
+    try {
+      final user = auth.currentUser;
+      if (user == null) {
+        return [];
+      }
+      
+      final questsRef = firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('quest_progress');
+      
+      // 최신 기록부터 최대 50개 로드
+      final snapshot = await questsRef
+          .orderBy('startTime', descending: true)
+          .limit(50)
+          .get();
+      
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;  // 문서 ID 추가
+        return data;
+      }).toList();
+    } catch (e) {
+      print('퀘스트 진행 기록 로드 오류: $e');
+      return [];
+    }
+  }
 }
 
 /// 웹 환경을 위한 User 구현
