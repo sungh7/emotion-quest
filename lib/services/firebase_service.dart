@@ -365,48 +365,49 @@ class FirebaseService {
     }
   }
   
-  /// 모든 감정 기록 가져오기
-  static Future<List<Map<String, dynamic>>> getEmotionRecords() async {
+  /// 감정 기록 목록 가져오기 (Firestore)
+  static Future<List<Map<String, dynamic>>> getEmotionRecords({DateTime? startDate, DateTime? endDate}) async {
+    // 사용자 로그인 여부 확인
     if (currentUser == null) {
-      return [];
+      print("로그인이 필요합니다.");
+      return []; // 로그아웃 상태에서는 빈 목록 반환
     }
     
-    if (isWeb && isJSFirebaseInitialized) {
-      try {
-        final result = await _callJSFunction(
-          'getEmotionRecordsJS',
-          [currentUser!.uid],
-          'getEmotionRecordsResult'
-        );
+    try {
+      // 사용자 ID로 필터링
+      Query query = firestore
+          .collection('emotion_records')
+          .where('userId', isEqualTo: currentUser!.uid)
+          .orderBy('timestamp', descending: true);
+          
+      // 시작 날짜 필터링
+      if (startDate != null) {
+        query = query.where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+      }
+      
+      // 종료 날짜 필터링
+      if (endDate != null) {
+        query = query.where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+      }
+      
+      final QuerySnapshot snapshot = await query.get();
+      
+      // 결과를 Map 목록으로 변환
+      final List<Map<String, dynamic>> records = snapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         
-        if (result['success'] == true) {
-          final List<dynamic> records = result['records'] ?? [];
-          return records.map((record) => Map<String, dynamic>.from(record)).toList();
-        } else {
-          print("감정 기록 가져오기 오류: ${result['error']}");
-          return [];
+        // Timestamp를 DateTime으로 변환
+        if (data['timestamp'] is Timestamp) {
+          data['timestamp'] = (data['timestamp'] as Timestamp).toDate().toIso8601String();
         }
-      } catch (e) {
-        print("감정 기록 가져오기 오류: $e");
-        return [];
-      }
-    } else {
-      try {
-        final snapshot = await firestore
-            .collection('users')
-            .doc(currentUser!.uid)
-            .collection('emotions')
-            .orderBy('timestamp', descending: true)
-            .get();
         
-        return snapshot.docs.map((doc) => {
-          ...doc.data(),
-          'id': doc.id,
-        }).toList();
-      } catch (e) {
-        print("감정 기록 가져오기 오류: $e");
-        return [];
-      }
+        return data;
+      }).toList();
+      
+      return records;
+    } catch (e) {
+      print("감정 기록 조회 오류: $e");
+      return []; // 오류 발생 시 빈 목록 반환
     }
   }
   

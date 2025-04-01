@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import '../services/emotion_service.dart';
+import '../models/emotion_record.dart';
 
 class EmotionStatsScreen extends StatefulWidget {
   const EmotionStatsScreen({Key? key}) : super(key: key);
@@ -35,44 +36,65 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
     try {
       final emotionService = Provider.of<EmotionService>(context, listen: false);
       
-      // 감정 기록 가져오기 (캐치 추가)
-      List<dynamic> records = [];
-      try {
-        records = await emotionService.getEmotionRecords();
-        print('감정 기록 ${records.length}개 로드됨');
-      } catch (e) {
-        print('감정 기록 로드 오류: $e');
-        records = [];
-      }
-      
-      // 시간 범위에 따라 필터링
-      final filteredRecords = _filterRecordsByTimeRange(records);
-      
-      // 감정별 카운트
-      final emotionCounts = <String, int>{};
-      // 태그별 카운트
-      final tagCounts = <String, int>{};
-      // 주간 데이터
-      final weeklyData = <Map<String, dynamic>>[];
-      
-      // 오늘 날짜
+      // 선택된 시간 범위에 따라 시작/종료 날짜 계산
+      DateTime? startDate;
+      DateTime? endDate;
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       
-      // 일주일 전 날짜
-      final weekAgo = today.subtract(const Duration(days: 7));
+      switch (_selectedTimeRange) {
+        case TimeRange.week:
+          startDate = today.subtract(const Duration(days: 7));
+          endDate = today.add(const Duration(days: 1)); // 오늘 포함
+          break;
+        case TimeRange.month:
+          startDate = DateTime(today.year, today.month - 1, today.day);
+          endDate = today.add(const Duration(days: 1)); // 오늘 포함
+          break;
+        case TimeRange.year:
+          startDate = DateTime(today.year - 1, today.month, today.day);
+          endDate = today.add(const Duration(days: 1)); // 오늘 포함
+          break;
+        case TimeRange.all:
+          startDate = null;
+          endDate = null;
+          break;
+      }
       
-      // 일별 기록 개수 초기화
-      for (int i = 0; i <= 7; i++) {
-        final date = weekAgo.add(Duration(days: i));
-        weeklyData.add({
-          'date': date,
-          'count': 0,
-        });
+      // 기간에 맞는 감정 기록 가져오기
+      List<EmotionRecord> records = [];
+      try {
+        records = await emotionService.getEmotionRecords(startDate: startDate, endDate: endDate);
+        print('기간 [${startDate?.toIso8601String()} - ${endDate?.toIso8601String()}] 감정 기록 ${records.length}개 로드됨');
+      } catch (e) {
+        print('기간별 감정 기록 로드 오류: $e');
+        records = [];
+      }
+      
+      // 감정별 카운트 계산
+      final emotionCounts = <String, int>{};
+      // 태그별 카운트 계산
+      final tagCounts = <String, int>{};
+      // 주간 데이터 계산 (선택된 범위가 '주'일 경우만 계산)
+      List<Map<String, dynamic>> weeklyData = [];
+      
+      if (_selectedTimeRange == TimeRange.week || _selectedTimeRange == TimeRange.all) {
+          // 오늘 날짜 (재계산 필요 없음)
+          // final now = DateTime.now();
+          // final today = DateTime(now.year, now.month, now.day);
+          
+          // 일주일 전 날짜 (재계산 필요 없음)
+          final weekAgo = today.subtract(const Duration(days: 7));
+          
+          // 일별 기록 개수 초기화
+          weeklyData = List.generate(8, (index) {
+            final date = weekAgo.add(Duration(days: index));
+            return {'date': date, 'count': 0};
+          });
       }
       
       // 레코드 순회하며 통계 데이터 수집
-      for (final record in filteredRecords) {
+      for (final record in records) { // filteredRecords 대신 records 사용
         try {
           // 감정 카운트
           final emotion = record.emotion;
@@ -83,45 +105,45 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
             tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
           }
           
-          // 일별 기록 카운트
-          DateTime recordDate;
-          try {
-            if (record.timestamp is String) {
-              recordDate = DateTime.parse(record.timestamp);
-            } else if (record.timestamp is DateTime) {
-              recordDate = record.timestamp;
-            } else {
-              print('지원되지 않는 timestamp 형식: ${record.timestamp.runtimeType}');
-              continue;
-            }
-          } catch (e) {
-            print('날짜 파싱 오류: ${record.timestamp} - $e');
-            continue;
-          }
-          
-          final recordDay = DateTime(recordDate.year, recordDate.month, recordDate.day);
-          
-          // 지난 7일 내의 기록인지 확인
-          if (recordDay.isAfter(weekAgo.subtract(const Duration(days: 1))) && 
-              recordDay.isBefore(today.add(const Duration(days: 1)))) {
-            // 날짜에 해당하는 데이터 찾기
-            for (final dayData in weeklyData) {
-              final date = dayData['date'] as DateTime;
-              if (date.year == recordDay.year && 
-                  date.month == recordDay.month && 
-                  date.day == recordDay.day) {
-                dayData['count'] = (dayData['count'] as int) + 1;
-                break;
+          // 주간 데이터 계산 (선택된 범위가 '주' 또는 '전체'일 경우)
+          if (_selectedTimeRange == TimeRange.week || _selectedTimeRange == TimeRange.all) {
+              DateTime recordDate;
+              try {
+                // record.timestamp는 이미 DateTime 객체
+                if (record.timestamp is DateTime) {
+                  recordDate = record.timestamp;
+                } else {
+                  continue; // 타임스탬프 형식 오류
+                }
+              } catch (e) {
+                continue; // 처리 오류
               }
-            }
+              
+              final recordDay = DateTime(recordDate.year, recordDate.month, recordDate.day);
+              final weekAgo = today.subtract(const Duration(days: 7));
+              
+              // 지난 7일 내의 기록인지 확인 (여기서 한번 더 필터링)
+              if (recordDay.isAfter(weekAgo.subtract(const Duration(days: 1))) && 
+                  recordDay.isBefore(today.add(const Duration(days: 1)))) {
+                // 날짜에 해당하는 데이터 찾기 및 카운트 증가
+                for (final dayData in weeklyData) {
+                  final date = dayData['date'] as DateTime;
+                  if (date.year == recordDay.year && 
+                      date.month == recordDay.month && 
+                      date.day == recordDay.day) {
+                    dayData['count'] = (dayData['count'] as int) + 1;
+                    break;
+                  }
+                }
+              }
           }
         } catch (e) {
           print('레코드 처리 중 오류: $e');
-          // 오류가 발생한 레코드는 건너뛰고 계속 진행
           continue;
         }
       }
       
+      // 상태 업데이트
       if (mounted) {
         setState(() {
           _emotionCounts.clear();
@@ -130,7 +152,13 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
           _tagCounts.clear();
           _tagCounts.addAll(tagCounts);
           
-          _weeklyData = weeklyData;
+          // 주간 데이터는 해당 범위일 때만 업데이트
+          if (_selectedTimeRange == TimeRange.week || _selectedTimeRange == TimeRange.all) {
+              _weeklyData = weeklyData;
+          } else {
+              // 다른 범위 선택 시 주간 데이터 초기화 또는 유지 결정 필요
+              // 예: _weeklyData.clear(); 
+          }
           _isLoading = false;
         });
       }

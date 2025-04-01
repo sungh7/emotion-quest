@@ -195,52 +195,78 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  // 감정 기록 목록 가져오기
-  Future<List<EmotionRecord>> getEmotionRecords() async {
+  // 감정 기록 목록 가져오기 (기간 지정 가능)
+  Future<List<EmotionRecord>> getEmotionRecords({DateTime? startDate, DateTime? endDate}) async {
     try {
-      await refreshEmotionRecords();
-      return _allRecords;
+      // Firebase에서 기간에 맞는 기록 조회 (백엔드 필터링)
+      if (FirebaseService.currentUser != null) {
+        final recordList = await FirebaseService.getEmotionRecords(startDate: startDate, endDate: endDate);
+        
+        // 로컬 캐시 업데이트 (주의: 이 방식은 기간별 조회가 빈번할 경우 비효율적일 수 있음)
+        // _allRecords.clear(); 
+        
+        List<EmotionRecord> processedRecords = [];
+        for (var record in recordList) {
+          try {
+            record = FirebaseService.processEmotionRecord(record);
+            final emotionRecord = EmotionRecord.fromJson(record);
+            processedRecords.add(emotionRecord);
+          } catch (e) {
+            print('레코드 처리 중 오류: $e');
+            continue;
+          }
+        }
+        // 선택적으로 로컬 캐시 업데이트 로직 추가 가능
+        // _updateRecords(processedRecords); 
+        return processedRecords;
+      } else {
+        // 로그인 안 된 경우 로컬 데이터 필터링
+        await _getLocalEmotionRecords();
+        return _filterLocalRecords(startDate, endDate);
+      }
     } catch (e) {
-      print('감정 기록 가져오기 오류: $e');
-      // 오류 발생 시 빈 배열 반환
+      print('기간별 감정 기록 가져오기 오류: $e');
       return [];
     }
   }
   
-  // 로컬 저장소에서 감정 기록 조회
-  Future<List<EmotionRecord>> _getLocalEmotionRecords() async {
+  // 로컬 기록 필터링 함수
+  List<EmotionRecord> _filterLocalRecords(DateTime? startDate, DateTime? endDate) {
+    if (startDate == null && endDate == null) {
+      return _allRecords; // 기간 없으면 전체 반환
+    }
+    return _allRecords.where((record) {
+      final recordTime = record.timestamp;
+      bool afterStartDate = startDate == null || recordTime.isAfter(startDate.subtract(const Duration(microseconds: 1)));
+      bool beforeEndDate = endDate == null || recordTime.isBefore(endDate.add(const Duration(microseconds: 1)));
+      return afterStartDate && beforeEndDate;
+    }).toList();
+  }
+  
+  // 로컬 저장소에서 감정 기록 조회 (캐시 업데이트 로직 분리)
+  Future<void> _getLocalEmotionRecords() async {
     try {
-      // 로컬에서 가져오기
       final prefs = await SharedPreferences.getInstance();
-      
-      // 저장된 기록 가져오기
       List<String>? jsonRecords = prefs.getStringList(_storageKey);
       
-      if (jsonRecords == null || jsonRecords.isEmpty) {
-        return [];
-      }
-      
-      // 로컬 캐시 업데이트
       _allRecords.clear();
-      
-      // JSON에서 객체로 변환 및 이미지 URL 처리
-      for (String jsonRecord in jsonRecords) {
-        final Map<String, dynamic> recordData = jsonDecode(jsonRecord);
-        
-        // 이미지 URL 처리
-        final processedRecord = FirebaseService.processEmotionRecord(recordData);
-        
-        final emotionRecord = EmotionRecord.fromJson(processedRecord);
-        _allRecords.add(emotionRecord);
+      if (jsonRecords != null && jsonRecords.isNotEmpty) {
+        for (String jsonRecord in jsonRecords) {
+          try {
+            final Map<String, dynamic> recordData = jsonDecode(jsonRecord);
+            final processedRecord = FirebaseService.processEmotionRecord(recordData);
+            final emotionRecord = EmotionRecord.fromJson(processedRecord);
+            _allRecords.add(emotionRecord);
+          } catch(e) {
+             print('로컬 레코드 파싱 오류: $e');
+             continue;
+          }
+        }
       }
-      
-      // 날짜별 그룹화 저장
-      _updateRecordsByDate();
-      
-      return _allRecords;
+      _updateRecordsByDate(); // 날짜별 그룹화는 유지
     } catch (e) {
       print('로컬 감정 기록 조회 오류: $e');
-      return [];
+      _allRecords.clear(); // 오류 시 캐시 비우기
     }
   }
   
@@ -497,11 +523,11 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  /// 감정 기록 새로고침 (강제 다시 로드)
+  // 감정 기록 새로고침 (강제 다시 로드 - 전체 데이터 로드 유지)
   Future<void> refreshEmotionRecords() async {
     try {
       if (FirebaseService.currentUser != null) {
-        // Firebase에서 기록 조회
+        // Firebase에서 전체 기록 조회 (기존 방식 유지)
         final recordList = await FirebaseService.getEmotionRecords();
         
         // 로컬 캐시 업데이트
@@ -509,28 +535,21 @@ class EmotionService extends ChangeNotifier {
         
         for (var record in recordList) {
           try {
-            // 이미지 URL 처리
             record = FirebaseService.processEmotionRecord(record);
-            
             final emotionRecord = EmotionRecord.fromJson(record);
             _allRecords.add(emotionRecord);
           } catch (e) {
             print('레코드 처리 중 오류: $e');
-            // 손상된 레코드는 건너뛰기
             continue;
           }
         }
-        
-        // 날짜별 그룹화 저장
-        _updateRecordsByDate();
+        _updateRecordsByDate(); // 기존 날짜별 그룹화 유지
       } else {
-        // 로그인하지 않은 경우 로컬 저장소에서 조회
         await _getLocalEmotionRecords();
       }
       notifyListeners();
     } catch (e) {
       print('감정 기록 새로고침 오류: $e');
-      // 오류가 발생했지만 재시도하지 않고 현재 상태 유지
     }
   }
   
