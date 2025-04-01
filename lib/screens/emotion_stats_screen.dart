@@ -26,15 +26,24 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
   }
   
   Future<void> _loadStats() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     
     try {
       final emotionService = Provider.of<EmotionService>(context, listen: false);
       
-      // 감정 기록 가져오기
-      final records = await emotionService.getEmotionRecords();
+      // 감정 기록 가져오기 (캐치 추가)
+      List<dynamic> records = [];
+      try {
+        records = await emotionService.getEmotionRecords();
+        print('감정 기록 ${records.length}개 로드됨');
+      } catch (e) {
+        print('감정 기록 로드 오류: $e');
+        records = [];
+      }
       
       // 시간 범위에 따라 필터링
       final filteredRecords = _filterRecordsByTimeRange(records);
@@ -64,32 +73,52 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
       
       // 레코드 순회하며 통계 데이터 수집
       for (final record in filteredRecords) {
-        // 감정 카운트
-        final emotion = record.emotion;
-        emotionCounts[emotion] = (emotionCounts[emotion] ?? 0) + 1;
-        
-        // 태그 카운트
-        for (final tag in record.tags) {
-          tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
-        }
-        
-        // 일별 기록 카운트
-        final recordDate = DateTime.parse(record.timestamp);
-        final recordDay = DateTime(recordDate.year, recordDate.month, recordDate.day);
-        
-        // 지난 7일 내의 기록인지 확인
-        if (recordDay.isAfter(weekAgo.subtract(const Duration(days: 1))) && 
-            recordDay.isBefore(today.add(const Duration(days: 1)))) {
-          // 날짜에 해당하는 데이터 찾기
-          for (final dayData in weeklyData) {
-            final date = dayData['date'] as DateTime;
-            if (date.year == recordDay.year && 
-                date.month == recordDay.month && 
-                date.day == recordDay.day) {
-              dayData['count'] = (dayData['count'] as int) + 1;
-              break;
+        try {
+          // 감정 카운트
+          final emotion = record.emotion;
+          emotionCounts[emotion] = (emotionCounts[emotion] ?? 0) + 1;
+          
+          // 태그 카운트
+          for (final tag in record.tags) {
+            tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+          }
+          
+          // 일별 기록 카운트
+          DateTime recordDate;
+          try {
+            if (record.timestamp is String) {
+              recordDate = DateTime.parse(record.timestamp);
+            } else if (record.timestamp is DateTime) {
+              recordDate = record.timestamp;
+            } else {
+              print('지원되지 않는 timestamp 형식: ${record.timestamp.runtimeType}');
+              continue;
+            }
+          } catch (e) {
+            print('날짜 파싱 오류: ${record.timestamp} - $e');
+            continue;
+          }
+          
+          final recordDay = DateTime(recordDate.year, recordDate.month, recordDate.day);
+          
+          // 지난 7일 내의 기록인지 확인
+          if (recordDay.isAfter(weekAgo.subtract(const Duration(days: 1))) && 
+              recordDay.isBefore(today.add(const Duration(days: 1)))) {
+            // 날짜에 해당하는 데이터 찾기
+            for (final dayData in weeklyData) {
+              final date = dayData['date'] as DateTime;
+              if (date.year == recordDay.year && 
+                  date.month == recordDay.month && 
+                  date.day == recordDay.day) {
+                dayData['count'] = (dayData['count'] as int) + 1;
+                break;
+              }
             }
           }
+        } catch (e) {
+          print('레코드 처리 중 오류: $e');
+          // 오류가 발생한 레코드는 건너뛰고 계속 진행
+          continue;
         }
       }
       
@@ -127,32 +156,41 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     
-    switch (_selectedTimeRange) {
-      case TimeRange.week:
-        final weekAgo = today.subtract(const Duration(days: 7));
-        return records.where((record) {
-          final recordDate = DateTime.parse(record.timestamp);
-          return recordDate.isAfter(weekAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
-        }).toList();
-      
-      case TimeRange.month:
-        final monthAgo = DateTime(today.year, today.month - 1, today.day);
-        return records.where((record) {
-          final recordDate = DateTime.parse(record.timestamp);
-          return recordDate.isAfter(monthAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
-        }).toList();
-      
-      case TimeRange.year:
-        final yearAgo = DateTime(today.year - 1, today.month, today.day);
-        return records.where((record) {
-          final recordDate = DateTime.parse(record.timestamp);
-          return recordDate.isAfter(yearAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
-        }).toList();
-      
-      case TimeRange.all:
-      default:
-        return records;
-    }
+    return records.where((record) {
+      try {
+        // timestamp가 string인지 DateTime인지 확인하고 처리
+        DateTime recordDate;
+        if (record.timestamp is String) {
+          recordDate = DateTime.parse(record.timestamp);
+        } else if (record.timestamp is DateTime) {
+          recordDate = record.timestamp;
+        } else {
+          return false; // 형식을 알 수 없는 경우 제외
+        }
+
+        // 선택된 시간 범위에 따라 필터링
+        switch (_selectedTimeRange) {
+          case TimeRange.week:
+            final weekAgo = today.subtract(const Duration(days: 7));
+            return recordDate.isAfter(weekAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
+          
+          case TimeRange.month:
+            final monthAgo = DateTime(today.year, today.month - 1, today.day);
+            return recordDate.isAfter(monthAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
+          
+          case TimeRange.year:
+            final yearAgo = DateTime(today.year - 1, today.month, today.day);
+            return recordDate.isAfter(yearAgo) && recordDate.isBefore(today.add(const Duration(days: 1)));
+          
+          case TimeRange.all:
+          default:
+            return true;
+        }
+      } catch (e) {
+        print('기록 필터링 중 오류: $e');
+        return false; // 오류가 발생한 레코드는 제외
+      }
+    }).toList();
   }
   
   @override
@@ -364,134 +402,246 @@ class _EmotionStatsScreenState extends State<EmotionStatsScreen> {
   
   // 감정 분포 위젯
   Widget _buildEmotionDistribution() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final emotionColors = {
-      '행복': Colors.green,
-      '슬픔': Colors.blue,
-      '분노': Colors.red,
-      '불안': Colors.amber,
-      '놀람': Colors.purple,
-      '혐오': Colors.brown,
-      '지루함': Colors.grey,
-    };
-    
-    // 감정 데이터를 PieChartSectionData 목록으로 변환
-    final sections = _emotionCounts.entries.map((entry) {
-      final color = emotionColors[entry.key] ?? 
-          Colors.primaries[entry.value % Colors.primaries.length];
+    try {
+      // 데이터가 비어있는 경우 표시할 위젯
+      if (_emotionCounts.isEmpty) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '감정 분포',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32.0),
+                    child: Text('기록된 감정이 없습니다'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       
-      return PieChartSectionData(
-        color: color,
-        value: entry.value.toDouble(),
-        title: '${entry.key}\n${entry.value}회',
-        radius: 60,
-        titleStyle: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: isDarkMode ? Colors.white : Colors.black,
-        ),
-      );
-    }).toList();
-    
-    return AspectRatio(
-      aspectRatio: 1.5,
-      child: PieChart(
-        PieChartData(
-          sections: sections,
-          sectionsSpace: 0,
-          centerSpaceRadius: 40,
-          pieTouchData: PieTouchData(
-            enabled: true,
-            touchCallback: (FlTouchEvent event, pieTouchResponse) {},
+      final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+      final emotionColors = {
+        '행복': Colors.green,
+        '슬픔': Colors.blue,
+        '분노': Colors.red,
+        '불안': Colors.amber,
+        '놀람': Colors.purple,
+        '혐오': Colors.brown,
+        '지루함': Colors.grey,
+      };
+      
+      // 감정 데이터를 PieChartSectionData 목록으로 변환
+      final sections = _emotionCounts.entries.map((entry) {
+        final color = emotionColors[entry.key] ?? 
+            Colors.primaries[_emotionCounts.keys.toList().indexOf(entry.key) % Colors.primaries.length];
+        
+        return PieChartSectionData(
+          color: color,
+          value: entry.value.toDouble(),
+          title: '${entry.key}\n${entry.value}회',
+          radius: 60,
+          titleStyle: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
+        );
+      }).toList();
+      
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '감정 분포',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              AspectRatio(
+                aspectRatio: 1.5,
+                child: PieChart(
+                  PieChartData(
+                    sections: sections,
+                    sectionsSpace: 0,
+                    centerSpaceRadius: 40,
+                    pieTouchData: PieTouchData(
+                      enabled: true,
+                      touchCallback: (FlTouchEvent event, pieTouchResponse) {},
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      print('감정 분포 차트 생성 오류: $e');
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '감정 분포',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32.0),
+                  child: Text('차트를 표시할 수 없습니다'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
   
   // 주간 차트
   Widget _buildWeeklyChart() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '주간 기록 활동',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+    try {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '주간 기록 활동',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: _weeklyData.map((data) {
-                  final date = data['date'] as DateTime;
-                  final count = data['count'] as int;
-                  
-                  // 최대 높이 계산 (최대값을 170px로)
-                  final maxCount = _weeklyData.fold(0, (max, data) => math.max(max as int, data['count'] as int));
-                  final height = maxCount > 0 
-                      ? 170 * (count / maxCount)
-                      : 0.0;
-                  
-                  // 오늘인지 확인
-                  final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  final isToday = date.year == today.year && 
-                                 date.month == today.month && 
-                                 date.day == today.day;
-                  
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          // 갯수 표시
-                          Text(
-                            '$count',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+              const SizedBox(height: 16),
+              
+              // 데이터가 비어있거나 모든 값이 0인 경우 메시지 표시
+              if (_weeklyData.isEmpty || _weeklyData.every((data) => (data['count'] as int) == 0))
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32.0),
+                    child: Text('주간 기록 데이터가 없습니다'),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 200,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: _weeklyData.map((data) {
+                      final date = data['date'] as DateTime;
+                      final count = data['count'] as int;
+                      
+                      // 최대 높이 계산 (최대값을 170px로)
+                      final maxCount = _weeklyData.fold(0, (max, data) => math.max(max as int, data['count'] as int));
+                      final height = maxCount > 0 
+                          ? 170 * (count / maxCount)
+                          : 0.0;
+                      
+                      // 오늘인지 확인
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
+                      final isToday = date.year == today.year && 
+                                     date.month == today.month && 
+                                     date.day == today.day;
+                      
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              // 갯수 표시
+                              Text(
+                                '$count',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              // 바 차트
+                              Container(
+                                height: height,
+                                decoration: BoxDecoration(
+                                  color: isToday 
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              // 요일 표시
+                              Text(
+                                DateFormat('E').format(date),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                  color: isToday ? Theme.of(context).colorScheme.primary : Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          // 바 차트
-                          Container(
-                            height: height,
-                            decoration: BoxDecoration(
-                              color: isToday 
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.primary.withOpacity(0.6),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // 요일 표시
-                          Text(
-                            DateFormat('E').format(date),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                              color: isToday ? Theme.of(context).colorScheme.primary : Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      print('주간 차트 생성 오류: $e');
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '주간 기록 활동',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32.0),
+                  child: Text('차트를 표시할 수 없습니다'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
   
   // 자주 사용된 태그

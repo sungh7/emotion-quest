@@ -197,8 +197,14 @@ class EmotionService extends ChangeNotifier {
   
   // 감정 기록 목록 가져오기
   Future<List<EmotionRecord>> getEmotionRecords() async {
-    await refreshEmotionRecords();
-    return _allRecords;
+    try {
+      await refreshEmotionRecords();
+      return _allRecords;
+    } catch (e) {
+      print('감정 기록 가져오기 오류: $e');
+      // 오류 발생 시 빈 배열 반환
+      return [];
+    }
   }
   
   // 로컬 저장소에서 감정 기록 조회
@@ -493,11 +499,39 @@ class EmotionService extends ChangeNotifier {
   
   /// 감정 기록 새로고침 (강제 다시 로드)
   Future<void> refreshEmotionRecords() async {
-    final records = await getEmotionRecords();
-    _allRecords.clear();
-    _allRecords.addAll(records);
-    _updateRecordsByDate();
-    notifyListeners();
+    try {
+      if (FirebaseService.currentUser != null) {
+        // Firebase에서 기록 조회
+        final recordList = await FirebaseService.getEmotionRecords();
+        
+        // 로컬 캐시 업데이트
+        _allRecords.clear();
+        
+        for (var record in recordList) {
+          try {
+            // 이미지 URL 처리
+            record = FirebaseService.processEmotionRecord(record);
+            
+            final emotionRecord = EmotionRecord.fromJson(record);
+            _allRecords.add(emotionRecord);
+          } catch (e) {
+            print('레코드 처리 중 오류: $e');
+            // 손상된 레코드는 건너뛰기
+            continue;
+          }
+        }
+        
+        // 날짜별 그룹화 저장
+        _updateRecordsByDate();
+      } else {
+        // 로그인하지 않은 경우 로컬 저장소에서 조회
+        await _getLocalEmotionRecords();
+      }
+      notifyListeners();
+    } catch (e) {
+      print('감정 기록 새로고침 오류: $e');
+      // 오류가 발생했지만 재시도하지 않고 현재 상태 유지
+    }
   }
   
   /// 익명 상태에서 저장한 기록을 로그인한 계정으로 연결
