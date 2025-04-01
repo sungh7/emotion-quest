@@ -2,13 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
-import '../services/firebase_service.dart';
-import '../services/theme_service.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -218,7 +215,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     
     // 최근 기록 사용 (최근 2주 이내 기록만)
     final now = DateTime.now();
-    final twoWeeksAgo = now.subtract(Duration(days: 14));
+    final twoWeeksAgo = now.subtract(const Duration(days: 14));
     final recentRecords = _records.where((r) => r.timestamp.isAfter(twoWeeksAgo)).toList();
     
     // 로그 추가
@@ -246,7 +243,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
       dayScores[weekday]!.add(score);
       
       // 지난주/이번주 구분
-      final weekAgo = now.subtract(Duration(days: 7));
+      final weekAgo = now.subtract(const Duration(days: 7));
       final isThisWeek = record.timestamp.isAfter(weekAgo);
       if (isThisWeek) {
         thisWeekSum += score;
@@ -437,13 +434,13 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   
   List<FlSpot> _getDefaultSpots() {
     return [
-      FlSpot(0, 3.5),
-      FlSpot(1, 2.0),
-      FlSpot(2, 4.0),
-      FlSpot(3, 3.0),
-      FlSpot(4, 5.0),
-      FlSpot(5, 1.5),
-      FlSpot(6, 4.0),
+      const FlSpot(0, 3.5),
+      const FlSpot(1, 2.0),
+      const FlSpot(2, 4.0),
+      const FlSpot(3, 3.0),
+      const FlSpot(4, 5.0),
+      const FlSpot(5, 1.5),
+      const FlSpot(6, 4.0),
     ];
   }
 
@@ -482,7 +479,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         child: Text(
                           'Overview',
                           style: TextStyle(
-                            color: isDark ? Colors.white : Color(0xFF111418),
+                            color: isDark ? Colors.white : const Color(0xFF111418),
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
@@ -497,12 +494,12 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                             _buildOverviewCard(
                               title: 'Total Entries',
                               value: '$_totalEntries',
-                              backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                              backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
                             ),
                             _buildOverviewCard(
                               title: 'Days Logged',
                               value: '$_daysLogged',
-                              backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                              backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
                             ),
                           ],
                         ),
@@ -512,7 +509,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         child: _buildOverviewCard(
                           title: 'Average Mood',
                           value: _averageMood,
-                          backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                          backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
                           isFullWidth: true,
                         ),
                       ),
@@ -526,7 +523,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                             Text(
                               'Trends',
                               style: TextStyle(
-                                color: isDark ? Colors.white : Color(0xFF111418),
+                                color: isDark ? Colors.white : const Color(0xFF111418),
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -538,7 +535,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                   builder: (context) => _buildTrendDetailSheet(context),
                                 );
                               },
-                              child: Text('Details'),
+                              child: const Text('Details'),
                             ),
                           ],
                         ),
@@ -548,9 +545,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         child: Card(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: isDark ? Color(0xFF2C2C2C) : Color(0xFFDCE0E5), width: 1),
+                            side: BorderSide(color: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFDCE0E5), width: 1),
                           ),
-                          color: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                          color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
                           margin: EdgeInsets.zero,
                           child: Padding(
                             padding: const EdgeInsets.all(16),
@@ -560,7 +557,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                 Text(
                                   'Mood Across Time',
                                   style: TextStyle(
-                                    color: isDark ? Colors.white : Color(0xFF111418),
+                                    color: isDark ? Colors.white : const Color(0xFF111418),
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -577,7 +574,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                     'M', 'T', 'W', 'T', 'F', 'S', 'S'
                                   ].map((day) => Text(
                                     day,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Color(0xFF637588),
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,
@@ -596,7 +593,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         child: Text(
                           'Common Patterns',
                           style: TextStyle(
-                            color: isDark ? Colors.white : Color(0xFF111418),
+                            color: isDark ? Colors.white : const Color(0xFF111418),
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
@@ -607,7 +604,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         child: GridView.count(
                           crossAxisCount: 2,
                           shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
+                          physics: const NeverScrollableScrollPhysics(),
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                           childAspectRatio: 2.5,
@@ -617,9 +614,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                               child: _buildPatternCard(
                                 emoji: pattern['emoji'],
                                 title: pattern['title'],
-                                borderColor: isDark ? Color(0xFF2C2C2C) : Color(0xFFDCE0E5),
-                                backgroundColor: isDark ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
-                                textColor: isDark ? Colors.white : Color(0xFF111418),
+                                borderColor: isDark ? const Color(0xFF2C2C2C) : const Color(0xFFDCE0E5),
+                                backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
+                                textColor: isDark ? Colors.white : const Color(0xFF111418),
                                 count: pattern['count'],
                               ),
                             );
@@ -657,7 +654,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   }) {
     // 다크 모드 여부 확인
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Color(0xFF111418);
+    final textColor = isDarkMode ? Colors.white : const Color(0xFF111418);
     
     return Container(
       width: isFullWidth ? double.infinity : 158,
@@ -665,7 +662,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
         color: backgroundColor,
         borderRadius: BorderRadius.circular(12),
       ),
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -677,7 +674,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               color: textColor,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
@@ -697,12 +694,14 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     
     // 로그 추가
     print('차트 데이터 포인트: ${spots.length}개');
-    spots.forEach((spot) => print('데이터 포인트: (${spot.x}, ${spot.y})'));
+    for (var spot in spots) {
+      print('데이터 포인트: (${spot.x}, ${spot.y})');
+    }
     
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final areaColor = isDarkMode ? Color(0xFF2A2A2A) : Color(0xFFF0F2F4);
-    final lineColor = isDarkMode ? Colors.lightBlue : Color(0xFF637588);
-    final textColor = isDarkMode ? Colors.white.withOpacity(0.9) : Color(0xFF637588);
+    final areaColor = isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFF0F2F4);
+    final lineColor = isDarkMode ? Colors.lightBlue : const Color(0xFF637588);
+    final textColor = isDarkMode ? Colors.white.withOpacity(0.9) : const Color(0xFF637588);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -743,21 +742,21 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                           ),
                         );
                       }
-                      return Text('');
+                      return const Text('');
                     },
                   ),
                 ),
-                leftTitles: AxisTitles(
+                leftTitles: const AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: false,
                   ),
                 ),
-                topTitles: AxisTitles(
+                topTitles: const AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: false,
                   ),
                 ),
-                rightTitles: AxisTitles(
+                rightTitles: const AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: false,
                   ),
@@ -881,9 +880,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           children: [
             Text(
               emoji,
-              style: TextStyle(fontSize: 24),
+              style: const TextStyle(fontSize: 24),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -919,11 +918,11 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   // 트렌드 상세 정보를 보여주는 바텀 시트
   Widget _buildTrendDetailSheet(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Color(0xFF111418);
-    final backgroundColor = isDarkMode ? Color(0xFF121212) : Colors.white;
+    final textColor = isDarkMode ? Colors.white : const Color(0xFF111418);
+    final backgroundColor = isDarkMode ? const Color(0xFF121212) : Colors.white;
     
     return Container(
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       color: backgroundColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -937,7 +936,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               color: textColor,
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
             _trendInsight,
             style: TextStyle(
@@ -945,7 +944,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               color: textColor,
             ),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Text(
             '요일별 평균 감정 점수',
             style: TextStyle(
@@ -954,7 +953,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               color: textColor,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           // 요일별 데이터 시각화
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -973,7 +972,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     _getDayName(day).substring(0, 1), // 첫 글자만
                     style: TextStyle(
@@ -1012,7 +1011,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     final records = _patternRecords[emotion] ?? [];
     
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Color(0xFF111418);
+    final textColor = isDarkMode ? Colors.white : const Color(0xFF111418);
     final backgroundColor = isDarkMode ? Colors.black : Colors.white;
     
     // 시간대별 발생 빈도 분석
@@ -1082,7 +1081,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
@@ -1094,7 +1093,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           builder: (context, scrollController) {
             return Container(
               color: backgroundColor,
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1102,9 +1101,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                     children: [
                       Text(
                         pattern['emoji'],
-                        style: TextStyle(fontSize: 28),
+                        style: const TextStyle(fontSize: 28),
                       ),
-                      SizedBox(width: 12),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1130,7 +1129,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                     ],
                   ),
                   
-                  Divider(height: 32),
+                  const Divider(height: 32),
                   
                   // 시간 패턴
                   Text(
@@ -1141,7 +1140,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                       color: textColor,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     records.isEmpty
                         ? '아직 데이터가 충분하지 않습니다.'
@@ -1153,7 +1152,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                   ),
                   
                   if (commonWords.isNotEmpty) ...[
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
                       '연관 키워드',
                       style: TextStyle(
@@ -1162,13 +1161,13 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         color: textColor,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: commonWords.map((word) {
                         return Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: pattern['isPositive'] == true
                                 ? Colors.green.withOpacity(0.1)
@@ -1193,7 +1192,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                     ),
                   ],
                   
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   
                   // 최근 기록
                   Text(
@@ -1204,7 +1203,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                       color: textColor,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   
                   Expanded(
                     child: records.isEmpty
@@ -1222,14 +1221,14 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                             itemBuilder: (context, index) {
                               final record = records[index];
                               return Card(
-                                margin: EdgeInsets.only(bottom: 8),
+                                margin: const EdgeInsets.only(bottom: 8),
                                 elevation: 0,
-                                color: isDarkMode ? Color(0xFF1E1E1E) : Color(0xFFF0F2F4),
+                                color: isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFF0F2F4),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Padding(
-                                  padding: EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(12),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
@@ -1253,7 +1252,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                         ],
                                       ),
                                       if (record.details != null && record.details!.isNotEmpty) ...[
-                                        SizedBox(height: 8),
+                                        const SizedBox(height: 8),
                                         Text(
                                           record.details!,
                                           style: TextStyle(

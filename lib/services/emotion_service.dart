@@ -298,12 +298,12 @@ class EmotionService extends ChangeNotifier {
         
         // 날짜 필터링
         final dayStart = DateTime(date.year, date.month, date.day);
-        final dayEnd = dayStart.add(Duration(days: 1)).subtract(Duration(microseconds: 1));
+        final dayEnd = dayStart.add(const Duration(days: 1)).subtract(const Duration(microseconds: 1));
         
         return allRecords.where((record) {
           final recordTime = record.timestamp;
-          return recordTime.isAfter(dayStart.subtract(Duration(seconds: 1))) && 
-                 recordTime.isBefore(dayEnd.add(Duration(seconds: 1)));
+          return recordTime.isAfter(dayStart.subtract(const Duration(seconds: 1))) && 
+                 recordTime.isBefore(dayEnd.add(const Duration(seconds: 1)));
         }).toList();
       } else {
         return [];
@@ -410,9 +410,9 @@ class EmotionService extends ChangeNotifier {
       
       // 시간대별 감정 맵 초기화
       final result = <String, Map<String, int>>{};
-      timeSlots.keys.forEach((slot) {
+      for (var slot in timeSlots.keys) {
         result[slot] = {};
-      });
+      }
       
       // 감정 기록을 시간대별로 분류
       for (final record in records) {

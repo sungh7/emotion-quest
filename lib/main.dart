@@ -8,12 +8,10 @@ import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/report_screen.dart';
-import 'screens/emotion_detail_screen.dart';
 import 'screens/wellbeing_screen.dart';
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import './services/wellbeing_service.dart';
+import './services/game_service.dart';
+import './services/quest_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +20,17 @@ void main() async {
   final themeService = ThemeService();
   await themeService.initialize();
   
+  // QuestService 초기화
+  final questService = QuestService();
+  
+  // Firebase 초기화 전에 assets 로드 시도
+  try {
+    await questService.loadQuests();
+    print('퀘스트 서비스 초기화 완료');
+  } catch (e) {
+    print('퀘스트 서비스 초기화 오류: $e');
+  }
+
   bool firebaseInitialized = false;
   
   try {
@@ -42,6 +51,8 @@ void main() async {
         ChangeNotifierProvider.value(value: themeService),
         ChangeNotifierProvider(create: (context) => WellbeingService()),
         Provider<bool>.value(value: firebaseInitialized),
+        ChangeNotifierProvider(create: (_) => GameService()),
+        ChangeNotifierProvider.value(value: questService),
       ],
       child: const MyApp(),
     ),

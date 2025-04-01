@@ -126,8 +126,8 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('삭제'),
           ),
         ],
       ),

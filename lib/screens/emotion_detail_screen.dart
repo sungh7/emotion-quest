@@ -2,26 +2,21 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
 import '../screens/tag_management_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
-import 'package:just_audio/just_audio.dart';
 // import 'package:record/record.dart';
-import 'package:uuid/uuid.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'package:flutter_animate/flutter_animate.dart';
 // 웹 지원을 위한 추가 임포트
-import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
 import 'dart:async'; // TimeoutException을 위한 import 추가
 import 'dart:convert'; // Base64 인코딩을 위한 import
 import 'package:image/image.dart' as img;
 import 'dart:math'; // max 함수 사용을 위한 import
+import '../services/game_service.dart';
 
 // 오디오 녹음을 위한 플랫폼별 조건부 임포트 추가는 웹 빌드에서 실패하므로 제거
 // import 'audio_helper.dart' if (dart.library.js) 'audio_helper_web.dart';
@@ -55,11 +50,12 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
   Uint8List? _webImageBytes;
   String? _webImageName;
   
-  bool _isLoading = false;
+  final bool _isLoading = false;
   bool _isSaving = false;
   bool _isRecording = false;
   List<Map<String, dynamic>> _availableTags = [];
-  List<String> _selectedTags = [];
+  final List<String> _selectedTags = [];
+  String _savingStatus = '';  // 저장 상태 메시지
   
   @override
   void initState() {
@@ -255,79 +251,62 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     */
   }
 
-  // 미디어 파일 업로드 메서드 추가
+  // 미디어 파일 업로드
   Future<String?> _uploadMedia() async {
     try {
-      if (_webImageBytes != null || _imageFile != null) {
-        // 웹과 모바일 모두 Firebase Storage 사용
-        try {
-          final storage = firebase_storage.FirebaseStorage.instance;
-          final ref = storage.ref().child('emotion_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-          
-          firebase_storage.UploadTask uploadTask;
-          if (kIsWeb && _webImageBytes != null) {
-            // 웹 환경: Uint8List로 업로드
-            uploadTask = ref.putData(
-              _webImageBytes!,
-              firebase_storage.SettableMetadata(
-                contentType: 'image/jpeg',
-                customMetadata: {'uploaded_from': 'web'}
-              )
-            );
-          } else {
-            // 모바일 환경: File로 업로드
-            uploadTask = ref.putFile(_imageFile!);
-          }
-          
-          // 업로드 진행 상태 표시
-          uploadTask.snapshotEvents.listen((snapshot) {
-            final progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            print('업로드 진행률: ${progress.toStringAsFixed(1)}%');
-          });
-          
-          // 타임아웃 설정
-          final result = await uploadTask.timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException('이미지 업로드 시간 초과'),
-          );
-          
-          return await result.ref.getDownloadURL();
-        } catch (e) {
-          print('이미지 업로드 오류: $e');
-          return null;
+      if (kIsWeb) {
+        if (_webImageBytes != null) {
+          // 웹에서는 Base64로 인코딩된 이미지 데이터를 직접 저장
+          final base64Image = base64Encode(_webImageBytes!);
+          return 'data:image/png;base64,$base64Image';
         }
-      } 
-      else if (_videoFile != null) {
-        // 비디오 업로드 (모바일만 해당)
-        try {
-          final storage = firebase_storage.FirebaseStorage.instance;
-          final ref = storage.ref().child('emotion_videos/${DateTime.now().millisecondsSinceEpoch}.mp4');
+      } else {
+        if (_imageFile != null) {
+          // 이미지 파일 업로드
+          final ref = firebase_storage.FirebaseStorage.instance.ref().child('images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+          final uploadTask = ref.putFile(_imageFile!);
           
-          final uploadTask = await ref.putFile(_videoFile!).timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException('비디오 업로드 시간 초과'),
-          );
-          
-          return await uploadTask.ref.getDownloadURL();
-        } catch (e) {
-          print('비디오 업로드 오류: $e');
-          return null;
-        }
-      } 
-      else if (_audioFile != null) {
-        try {
-          final storage = firebase_storage.FirebaseStorage.instance;
-          final ref = storage.ref().child('emotion_audios/${DateTime.now().millisecondsSinceEpoch}.m4a');
-          
-          final uploadTask = await ref.putFile(_audioFile!).timeout(
+          // 20초 타임아웃 설정
+          final snapshot = await uploadTask.whenComplete(() {}).timeout(
             const Duration(seconds: 20),
-            onTimeout: () => throw TimeoutException('오디오 업로드 시간 초과'),
+            onTimeout: () {
+              throw TimeoutException('이미지 업로드 시간 초과');
+            },
           );
           
-          return await uploadTask.ref.getDownloadURL();
-        } catch (e) {
-          print('오디오 업로드 오류: $e');
-          return null;
+          return await snapshot.ref.getDownloadURL();
+        }
+        
+        if (_videoFile != null) {
+          // 비디오 파일 업로드
+          final ref = firebase_storage.FirebaseStorage.instance.ref().child('videos/${DateTime.now().millisecondsSinceEpoch}.mp4');
+          final uploadTask = ref.putFile(_videoFile!);
+          
+          // 30초 타임아웃 설정
+          final snapshot = await uploadTask.whenComplete(() {}).timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException('비디오 업로드 시간 초과');
+            },
+          );
+          
+          return await snapshot.ref.getDownloadURL();
+        }
+        
+        if (_audioFile != null) {
+          // 오디오 파일 업로드
+          final ref = firebase_storage.FirebaseStorage.instance.ref().child('audios/${DateTime.now().millisecondsSinceEpoch}.m4a');
+          final uploadTask = ref.putFile(_audioFile!);
+          
+          // 20초 타임아웃 설정
+          final snapshot = await uploadTask.whenComplete(() {}).timeout(
+            const Duration(seconds: 20),
+            onTimeout: () {
+              throw TimeoutException('오디오 업로드 시간 초과');
+            },
+          );
+          
+          return await snapshot.ref.getDownloadURL();
         }
       }
       
@@ -394,87 +373,66 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
     }
   }
 
-  // 감정 기록 저장 (통합된 메서드)
-  Future<void> _saveEmotionRecord() async {
-    // 로딩 상태 설정
-    setState(() {
-      _isLoading = true;
-      _isSaving = true;
-    });
-
+  // 감정 기록 저장
+  Future<bool> _saveEmotionRecord() async {
     try {
+      setState(() {
+        _isSaving = true;
+        _savingStatus = '감정 기록 저장 중...';
+      });
+      
       // 미디어 파일 있는 경우 업로드 시작
       String? mediaUrl;
       
       if (_imageFile != null || _videoFile != null || _audioFile != null || _webImageBytes != null) {
-        // 업로드 진행 중 안내
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('미디어 파일을 업로드하는 중입니다. 잠시만 기다려주세요...'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        setState(() {
+          _savingStatus = '미디어 파일 업로드 중...';
+        });
         
         // 미디어 업로드
         mediaUrl = await _uploadMedia();
         print('미디어 업로드 결과: $mediaUrl');
       }
       
-      // EmotionRecord 생성
-      EmotionRecord record = EmotionRecord(
+      // 감정 기록 생성
+      final record = EmotionRecord(
+        id: '',  // Firestore에서 자동 생성
+        userId: FirebaseService.currentUser?.uid ?? 'anonymous',
+        timestamp: DateTime.now(),
         emotion: widget.emotion,
         emoji: widget.emoji,
-        timestamp: DateTime.now(),
+        isCustomEmotion: false,
         details: _detailsController.text.isEmpty ? null : _detailsController.text.trim(),
         tags: _selectedTags.toList(),
-        imageUrl: mediaUrl,
+        imageUrl: _imageFile != null || _webImageBytes != null ? mediaUrl : null,
         videoUrl: _videoFile != null ? mediaUrl : null,
         audioUrl: _audioFile != null ? mediaUrl : null,
         diaryContent: _diaryController.text.isEmpty ? null : _diaryController.text.trim(),
       );
-
-      print('저장할 감정 기록: ${record.toString()}');
-      print('imageUrl: ${record.imageUrl}');
-
+      
       // 감정 기록 저장
       final success = await Provider.of<EmotionService>(context, listen: false).saveEmotionRecord(record);
       
-      print('감정 기록 저장 결과: $success');
-
-      // 저장 성공 메시지
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? '감정이 저장되었습니다' : '저장 실패: Firestore에 저장되지 않았습니다.'),
-            backgroundColor: success ? Colors.green : Colors.red,
-          ),
-        );
+      if (success) {
+        // 게임 요소 처리
+        final gameService = Provider.of<GameService>(context, listen: false);
+        await gameService.processRecordRewards(record);
         
-        // 화면 닫기
-        if (success) {
-          Navigator.pop(context, true);
-        } else {
-          // 저장 실패 시 로딩 상태 해제
-          setState(() {
-            _isLoading = false;
-            _isSaving = false;
-          });
+        // 저장 성공 시 화면 닫기
+        if (mounted) {
+          Navigator.of(context).pop(true);
         }
       }
+      
+      return success;
     } catch (e) {
-      // 오류 처리
+      print('감정 기록 저장 오류: $e');
+      return false;
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('감정 기록 저장 중 오류가 발생했습니다: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        
-        // 로딩 상태 해제
         setState(() {
-          _isLoading = false;
           _isSaving = false;
+          _savingStatus = '';
         });
       }
     }
@@ -585,8 +543,8 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
                   Text(
                     _isSaving ? '감정 기록 저장 중...' : '로딩 중...',
                     style: TextStyle(color: Colors.grey[600]),

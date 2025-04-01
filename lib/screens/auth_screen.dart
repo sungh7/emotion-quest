@@ -132,7 +132,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     final backgroundColor = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FC);
     final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDarkMode ? Colors.white : const Color(0xFF1E1E1E);
-    final primaryColor = Colors.blue;
+    const primaryColor = Colors.blue;
     
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -150,7 +150,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // 로고 또는 앱 아이콘
-                      Icon(
+                      const Icon(
                         CupertinoIcons.heart_fill,
                         size: 80,
                         color: primaryColor,
@@ -344,7 +344,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     void Function(String)? onFieldSubmitted,
   }) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Colors.blue;
+    const primaryColor = Colors.blue;
     final textColor = isDarkMode ? Colors.white : Colors.black87;
     final fillColor = isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F7);
     
@@ -375,7 +375,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
+          borderSide: const BorderSide(
             color: primaryColor,
             width: 1.5,
           ),

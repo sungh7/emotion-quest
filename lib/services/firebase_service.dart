@@ -1,4 +1,3 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -6,7 +5,6 @@ import 'dart:async';
 // 웹 환경에서만 js 라이브러리 import
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/emotion_record.dart';
 
 /// Firebase 인증 및 데이터베이스 서비스
 ///
@@ -21,7 +19,7 @@ class FirebaseService {
   // 내부 인스턴스 저장
   static FirebaseAuth? _auth;
   static FirebaseFirestore? _firestore;
-  static bool _jsFirebaseInitialized = false;
+  static const bool _jsFirebaseInitialized = false;
   static bool _initialized = false;
   
   /// Firebase 초기화 여부 반환
@@ -97,7 +95,7 @@ class FirebaseService {
           return;
         }
         
-        throw e;
+        rethrow;
       }
     } catch (e) {
       print("Firebase 서비스 초기화 오류: $e");
@@ -129,7 +127,7 @@ class FirebaseService {
         // 웹 환경에서 사용할 경우 dart:js를 조건부로 임포트하여 구현 필요
         return {'success': false, 'error': 'Method not implemented for this platform'};
       } catch (e) {
-        print('${resultVarName} 처리 오류: $e');
+        print('$resultVarName 처리 오류: $e');
         await Future.delayed(Duration(milliseconds: delayMs));
       }
     }

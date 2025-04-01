@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../widgets/emotion_button.dart';
 import '../models/emotion_record.dart';
 import '../services/emotion_service.dart';
 import '../services/firebase_service.dart';
@@ -8,6 +7,8 @@ import '../services/theme_service.dart';
 import '../screens/emotion_detail_screen.dart';
 import '../screens/custom_emotion_screen.dart';
 import '../screens/tag_management_screen.dart';
+import '../screens/quest_screen.dart';
+import '../services/quest_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -16,13 +17,15 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _detailsController = TextEditingController();
   bool _isSaving = false;
   bool _isFirebaseInitialized = false;
   String _selectedEmotion = '';
   String _selectedEmotionEmoji = '';
   Set<String> _selectedTags = {};
+  late TabController _tabController;
+  int _currentIndex = 0;
   
   // 정의된 감정 목록
   final List<Map<String, String>> emotions = [
@@ -39,12 +42,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {
+        _currentIndex = _tabController.index;
+      });
+    });
     _checkFirebaseStatus();
   }
   
   @override
   void dispose() {
     _detailsController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
   
@@ -85,6 +95,186 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pushNamed(context, '/wellbeing');
   }
 
+  // 감정 버튼 클릭 시 감정 기록 화면으로 이동
+  void _showEmotionDetailDialog(String emotion, String emoji) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmotionDetailScreen(
+          emotion: emotion,
+          emoji: emoji,
+        ),
+      ),
+    );
+  }
+
+  // 감정 선택 시 퀘스트 화면으로 이동
+  void _onEmotionQuestSelected(String emotion, String emoji) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QuestScreen(
+          emotion: emotion,
+          emoji: emoji,
+        ),
+      ),
+    );
+  }
+
+  // 감정 버튼 생성 (감정 기록용)
+  Widget _buildEmotionRecordButton(String emotion, String emoji, bool isCustom) {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      child: ElevatedButton(
+        onPressed: () => _showEmotionDetailDialog(emotion, emoji),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              emoji,
+              style: const TextStyle(fontSize: 32),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              emotion,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (isCustom)
+              const Icon(Icons.star, size: 14, color: Colors.amber),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 퀘스트 감정 버튼 생성
+  Widget _buildQuestEmotionButton(String emotion, String emoji) {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      child: ElevatedButton(
+        onPressed: () => _onEmotionQuestSelected(emotion, emoji),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.all(16),
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              emoji,
+              style: const TextStyle(fontSize: 32),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              emotion,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ),
+            const Icon(Icons.fitness_center, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 감정 그리드 생성 (감정 기록용)
+  Widget _buildEmotionRecordGrid() {
+    final emotionService = Provider.of<EmotionService>(context);
+    final customEmotions = emotionService.customEmotions;
+    final allEmotions = [
+      ...emotionService.defaultEmotions.map((e) => {'emotion': e['emotion'], 'emoji': e['emoji']}),
+      ...customEmotions.map((e) => {'emotion': e['emotion'], 'emoji': e['emoji']}),
+    ];
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 1.5,
+      ),
+      itemCount: allEmotions.length,
+      itemBuilder: (context, index) {
+        final emotion = allEmotions[index];
+        final isCustom = index >= emotionService.defaultEmotions.length;
+        
+        return _buildEmotionRecordButton(
+          emotion['emotion']!,
+          emotion['emoji']!,
+          isCustom,
+        );
+      },
+    );
+  }
+
+  // 퀘스트 감정 그리드 생성
+  Widget _buildQuestEmotionGrid() {
+    final questService = Provider.of<QuestService>(context);
+    final emotions = questService.availableEmotions;
+
+    // 감정별 이모지 매핑
+    final emojiMap = {
+      '감사': '🙏',
+      '기쁨': '😊',
+      '무기력': '😔',
+      '불안': '😰',
+      '우울': '😢',
+      '집중': '🎯',
+      '짜증': '😤',
+      '평온': '😌',
+    };
+
+    if (questService.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (emotions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('감정 퀘스트를 불러올 수 없습니다.'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () async {
+                await questService.loadQuests();
+              },
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 1.2,
+      ),
+      itemCount: emotions.length,
+      itemBuilder: (context, index) {
+        final emotion = emotions[index];
+        final emoji = emojiMap[emotion] ?? '❓';
+        return _buildQuestEmotionButton(emotion, emoji);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeService = Provider.of<ThemeService>(context);
@@ -103,9 +293,6 @@ class _HomeScreenState extends State<HomeScreen> {
       print('로그인 상태 확인 오류: $e');
       isLoggedIn = false;
     }
-    
-    // 모든 감정 목록 (기본 + 사용자 정의)
-    final allEmotions = emotionService.allEmotions;
     
     return Scaffold(
       appBar: AppBar(
@@ -184,171 +371,80 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.edit_note),
+              text: '감정 기록',
+            ),
+            Tab(
+              icon: Icon(Icons.fitness_center),
+              text: '감정 퀘스트',
+            ),
+          ],
+        ),
       ),
-      body: _isFirebaseInitialized 
-        ? _isSaving 
-            ? const Center(child: CircularProgressIndicator())
-            : Padding(
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // 감정 기록 탭
+          Column(
+            children: [
+              Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          '지금 당신의 감정은 어떤가요?',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (isLoggedIn)
-                          Chip(
-                            avatar: const Icon(Icons.person, size: 18),
-                            label: Text(
-                              FirebaseService.currentUser?.email?.split('@')[0] ?? '사용자',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (!_isFirebaseInitialized)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Card(
-                          color: Colors.yellow[100],
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.warning, color: Colors.orange),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'Firebase 초기화 오류: 로그인하여 데이터를 저장할 수 없습니다. 계정 없이도 앱을 사용할 수 있지만 데이터는 로컬에만 저장됩니다.',
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pushNamed(context, '/auth');
-                                  },
-                                  child: const Text('로그인'),
-                                )
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _MenuButton(
-                              icon: Icons.add_reaction_outlined,
-                              label: '감정 추가',
-                              onPressed: () => _navigateToCustomEmotionScreen(context),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _MenuButton(
-                              icon: Icons.tag,
-                              label: '태그 관리',
-                              onPressed: () => _navigateToTagManagementScreen(context),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _MenuButton(
-                              icon: Icons.bar_chart,
-                              label: '통계',
-                              onPressed: () => Navigator.pushNamed(context, '/report'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            '감정 선택',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (allEmotions.length > emotionService.defaultEmotions.length)
-                            Text(
-                              '총 ${allEmotions.length}개의 감정',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: GridView.builder(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 1.5,
-                        ),
-                        itemCount: allEmotions.length,
-                        itemBuilder: (context, index) {
-                          final emotion = allEmotions[index];
-                          final isCustom = index >= emotionService.defaultEmotions.length;
-                          
-                          return EmotionButton(
-                            emotion: emotion['emotion']!,
-                            emoji: emotion['emoji']!,
-                            isCustom: isCustom,
-                            onPressed: () => _showEmotionDetailDialog(
-                              emotion['emotion']!,
-                              emotion['emoji']!,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _selectedEmotion.isEmpty 
-                        ? null 
-                        : () {
-                            _saveEmotionRecord(_selectedEmotion, _selectedEmotionEmoji);
-                          },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.save),
-                      label: const Text('감정 저장하기'),
-                    ),
-                  ],
+                child: Text(
+                  '오늘의 감정을 기록해보세요',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
                 ),
-              )
-        : const Center(child: CircularProgressIndicator()),
+              ),
+              Expanded(
+                child: _buildEmotionRecordGrid(),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CustomEmotionScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('나만의 감정 만들기'),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+          
+          // 감정 퀘스트 탭
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  '감정에 맞는 퀘스트를 선택해보세요',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              Expanded(
+                child: _buildQuestEmotionGrid(),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  void _showEmotionDetailDialog(String emotion, String emoji) {
-    // 다이얼로그 대신 EmotionDetailScreen으로 이동
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => EmotionDetailScreen(
-          emotion: emotion,
-          emoji: emoji,
-        ),
-      ),
-    );
+  void _toggleTheme(BuildContext context) {
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    themeService.toggleTheme();
   }
-  
+
   void _saveEmotionRecord(String emotion, String emoji) async {
     if (emotion.isEmpty) {
       _showMessage('감정을 선택해주세요.', isError: true);
@@ -447,11 +543,6 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: isError ? Colors.red : Colors.green,
       ),
     );
-  }
-
-  void _toggleTheme(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context, listen: false);
-    themeService.toggleTheme();
   }
 }
 
