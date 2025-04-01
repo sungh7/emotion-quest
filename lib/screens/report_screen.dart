@@ -792,7 +792,6 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               lineTouchData: LineTouchData(
                 enabled: true,
                 touchTooltipData: LineTouchTooltipData(
-                  tooltipBgColor: isDarkMode ? Colors.grey[800]! : Colors.white,
                   tooltipRoundedRadius: 8,
                   getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
                     return touchedBarSpots.map((barSpot) {

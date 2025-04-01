@@ -416,7 +416,7 @@ class _EmotionDetailScreenState extends State<EmotionDetailScreen> with TickerPr
       if (success) {
         // 게임 요소 처리
         final gameService = Provider.of<GameService>(context, listen: false);
-        await gameService.processRecordRewards(record);
+        await gameService.processRewardForRecord(record);
         
         // 저장 성공 시 화면 닫기
         if (mounted) {

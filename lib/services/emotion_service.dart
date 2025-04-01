@@ -195,36 +195,10 @@ class EmotionService extends ChangeNotifier {
     }
   }
   
-  // 감정 기록 가져오기
+  // 감정 기록 목록 가져오기
   Future<List<EmotionRecord>> getEmotionRecords() async {
-    try {
-      if (FirebaseService.currentUser != null) {
-        // Firebase에서 기록 조회
-        final recordList = await FirebaseService.getEmotionRecords();
-        
-        // 로컬 캐시 업데이트
-        _allRecords.clear();
-        
-        for (var record in recordList) {
-          // 이미지 URL 처리
-          record = FirebaseService.processEmotionRecord(record);
-          
-          final emotionRecord = EmotionRecord.fromJson(record);
-          _allRecords.add(emotionRecord);
-        }
-        
-        // 날짜별 그룹화 저장
-        _updateRecordsByDate();
-        
-        return _allRecords;
-      } else {
-        // 로그인하지 않은 경우 로컬 저장소에서 조회
-        return _getLocalEmotionRecords();
-      }
-    } catch (e) {
-      print('감정 기록 조회 오류: $e');
-      return [];
-    }
+    await refreshEmotionRecords();
+    return _allRecords;
   }
   
   // 로컬 저장소에서 감정 기록 조회

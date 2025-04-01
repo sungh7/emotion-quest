@@ -75,21 +75,36 @@ class _QuestScreenState extends State<QuestScreen> {
       return;
     }
     
-    // 경험치 추가
-    if (gameService.userStats != null) {
-      final newStats = gameService.userStats!.addExperience(_currentQuest!.expReward);
-      await gameService.updateStats(newStats);
+    // 경험치 추가 및 퀘스트 완료 카운트 증가
+    if (_currentQuest != null) {
+      // 현재 레벨 저장
+      final int prevLevel = gameService.userStats?.level ?? 1;
+      
+      // 경험치 추가
+      final expReward = await gameService.processRewardForQuest(_currentQuest!);
       
       // 레벨업 체크 및 효과 표시
-      if (newStats.level > gameService.userStats!.level) {
-        _confettiController.play();
+      if (gameService.userStats != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🎉 레벨 ${newStats.level}로 레벨업!'),
+              content: Text('🎉 퀘스트 완료! +$expReward EXP 획득'),
               backgroundColor: Colors.green,
             ),
           );
+          
+          // 레벨업 확인
+          if (gameService.userStats!.level > prevLevel) {
+            _confettiController.play();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('🎉 레벨 ${gameService.userStats!.level}로 레벨업!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          }
         }
       }
     }

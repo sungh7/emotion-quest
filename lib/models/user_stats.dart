@@ -5,29 +5,36 @@ class UserStats {
   int experience;
   int recordCount;
   DateTime lastRecordDate;
+  int completedQuests;  // 완료한 퀘스트 수
 
   // 생성자
   UserStats({
     this.level = 1,
     this.experience = 0,
     this.recordCount = 0,
+    this.completedQuests = 0,
     DateTime? lastRecordDate,
   }) : lastRecordDate = lastRecordDate ?? DateTime.now();
 
   // 다음 레벨에 필요한 경험치 계산
   int get nextLevelExp => level * 100;
+  
+  // 다음 레벨에 필요한 경험치 (속성으로도 제공)
+  int get experienceForNextLevel => nextLevelExp;
 
   // 복사 생성자
   UserStats copyWith({
     int? level,
     int? experience,
     int? recordCount,
+    int? completedQuests,
     DateTime? lastRecordDate,
   }) {
     return UserStats(
       level: level ?? this.level,
       experience: experience ?? this.experience,
       recordCount: recordCount ?? this.recordCount,
+      completedQuests: completedQuests ?? this.completedQuests,
       lastRecordDate: lastRecordDate ?? this.lastRecordDate,
     );
   }
@@ -38,8 +45,8 @@ class UserStats {
     int newLevel = level;
     
     // 레벨업 체크
-    while (newExp >= nextLevelExp) {
-      newExp -= nextLevelExp;
+    while (newExp >= experienceForNextLevel) {
+      newExp -= experienceForNextLevel;
       newLevel++;
     }
     
@@ -56,6 +63,13 @@ class UserStats {
       lastRecordDate: DateTime.now(),
     );
   }
+  
+  // 퀘스트 완료 카운트 증가
+  UserStats incrementQuestCount() {
+    return copyWith(
+      completedQuests: completedQuests + 1,
+    );
+  }
 
   // JSON 변환
   Map<String, dynamic> toJson() {
@@ -63,6 +77,7 @@ class UserStats {
       'level': level,
       'experience': experience,
       'recordCount': recordCount,
+      'completedQuests': completedQuests,
       'lastRecordDate': lastRecordDate.millisecondsSinceEpoch,
     };
   }
@@ -73,6 +88,7 @@ class UserStats {
       level: json['level'] ?? 1,
       experience: json['experience'] ?? 0,
       recordCount: json['recordCount'] ?? 0,
+      completedQuests: json['completedQuests'] ?? 0,
       lastRecordDate: json['lastRecordDate'] != null
           ? DateTime.fromMillisecondsSinceEpoch(json['lastRecordDate'])
           : DateTime.now(),

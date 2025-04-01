@@ -1,105 +1,94 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeService extends ChangeNotifier {
-  static const String _themeKey = 'theme_mode';
-  
+  // 테마 모드
   ThemeMode _themeMode = ThemeMode.system;
-  late SharedPreferences _prefs;
   
+  // 로컬 저장소 키
+  static const String _themeModeKey = 'theme_mode';
+  
+  // 게터
   ThemeMode get themeMode => _themeMode;
   
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
+  // 현재 다크 모드 여부
+  bool get isDarkMode {
+    if (_themeMode == ThemeMode.system) {
+      final brightness = SchedulerBinding.instance.platformDispatcher.platformBrightness;
+      return brightness == Brightness.dark;
+    }
+    return _themeMode == ThemeMode.dark;
+  }
   
-  // 라이트 테마 정의
-  ThemeData get lightTheme => ThemeData.light(
-    useMaterial3: true,
-  ).copyWith(
-    colorScheme: ColorScheme.light(
-      primary: Colors.teal[600] ?? Colors.teal,
-      secondary: Colors.tealAccent[700] ?? Colors.tealAccent,
-    ),
-  );
-  
-  // 다크 테마 정의
-  ThemeData get darkTheme => ThemeData.dark(
-    useMaterial3: true,
-  ).copyWith(
-    colorScheme: ColorScheme.dark(
-      primary: Colors.teal[400] ?? Colors.teal,
-      secondary: Colors.tealAccent[400] ?? Colors.tealAccent,
-    ),
-  );
-  
-  /// 테마 서비스 초기화 및 저장된 테마 모드 로드
-  Future<void> initialize() async {
-    _prefs = await SharedPreferences.getInstance();
+  // 생성자
+  ThemeService() {
     _loadThemeMode();
   }
   
-  /// SharedPreferences에서 테마 모드 설정 로드
-  void _loadThemeMode() {
-    final savedThemeMode = _prefs.getString(_themeKey);
-    if (savedThemeMode != null) {
-      switch (savedThemeMode) {
-        case 'light':
-          _themeMode = ThemeMode.light;
-          break;
-        case 'dark':
-          _themeMode = ThemeMode.dark;
-          break;
-        default:
-          _themeMode = ThemeMode.system;
-          break;
+  // 테마 모드 로드
+  Future<void> _loadThemeMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeModeIndex = prefs.getInt(_themeModeKey);
+      
+      if (themeModeIndex != null) {
+        _themeMode = ThemeMode.values[themeModeIndex];
       }
+      
+      notifyListeners();
+    } catch (e) {
+      print('테마 모드 로드 오류: $e');
     }
-    notifyListeners();
   }
   
-  /// 테마 모드 변경 및 저장
+  // 테마 모드 저장
+  Future<void> _saveThemeMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_themeModeKey, _themeMode.index);
+    } catch (e) {
+      print('테마 모드 저장 오류: $e');
+    }
+  }
+  
+  // 테마 모드 설정
   Future<void> setThemeMode(ThemeMode mode) async {
-    if (_themeMode == mode) return;
-    
     _themeMode = mode;
-    
-    String themeModeValue;
-    switch (mode) {
-      case ThemeMode.light:
-        themeModeValue = 'light';
-        break;
-      case ThemeMode.dark:
-        themeModeValue = 'dark';
-        break;
-      case ThemeMode.system:
-        themeModeValue = 'system';
-        break;
-    }
-    
-    await _prefs.setString(_themeKey, themeModeValue);
+    await _saveThemeMode();
     notifyListeners();
   }
   
-  /// 라이트 모드로 설정
-  Future<void> setLightMode() async {
-    await setThemeMode(ThemeMode.light);
-  }
-  
-  /// 다크 모드로 설정
-  Future<void> setDarkMode() async {
-    await setThemeMode(ThemeMode.dark);
-  }
-  
-  /// 시스템 설정 모드로 설정
-  Future<void> setSystemMode() async {
-    await setThemeMode(ThemeMode.system);
-  }
-  
-  /// 현재 테마 모드를 반대 모드로 전환 (라이트 <-> 다크)
+  // 테마 모드 토글 (다크 <-> 라이트)
   Future<void> toggleTheme() async {
     if (_themeMode == ThemeMode.dark) {
       await setThemeMode(ThemeMode.light);
     } else {
       await setThemeMode(ThemeMode.dark);
     }
+  }
+  
+  // 라이트 테마
+  ThemeData getLightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.light,
+      ),
+      useMaterial3: true,
+    );
+  }
+  
+  // 다크 테마
+  ThemeData getDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.dark,
+      ),
+      useMaterial3: true,
+    );
   }
 } 

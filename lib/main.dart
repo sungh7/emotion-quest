@@ -12,13 +12,10 @@ import 'screens/wellbeing_screen.dart';
 import './services/wellbeing_service.dart';
 import './services/game_service.dart';
 import './services/quest_service.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // ThemeService 초기화
-  final themeService = ThemeService();
-  await themeService.initialize();
   
   // QuestService 초기화
   final questService = QuestService();
@@ -37,6 +34,7 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await FirebaseService.initializeFirebase();
     firebaseInitialized = true;
     print('Firebase initialized successfully');
   } catch (e) {
@@ -48,7 +46,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => EmotionService()),
-        ChangeNotifierProvider.value(value: themeService),
+        ChangeNotifierProvider(create: (context) => ThemeService()),
         ChangeNotifierProvider(create: (context) => WellbeingService()),
         Provider<bool>.value(value: firebaseInitialized),
         ChangeNotifierProvider(create: (_) => GameService()),
@@ -74,8 +72,8 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: '감정 퀘스트',
           debugShowCheckedModeBanner: false,
-          theme: themeService.lightTheme,
-          darkTheme: themeService.darkTheme,
+          theme: themeService.getLightTheme(),
+          darkTheme: themeService.getDarkTheme(),
           themeMode: themeService.themeMode,
           home: _getInitialScreen(firebaseInitialized),
           routes: {
