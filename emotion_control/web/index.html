@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+    <base href="$FLUTTER_BASE_HREF" />
+
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="감정을 기록하고 관리하는 앱" />
+
+    <!-- iOS meta tags & icons -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="감정 퀘스트" />
+    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png" />
+
+    <title>감정 퀘스트</title>
+    <link rel="manifest" href="manifest.json" />
+
+    <script>
+      // The value below is injected by flutter build, do not touch.
+      var serviceWorkerVersion = null;
+    </script>
+
+    <!-- This script adds the flutter initialization JS code -->
+    <script src="flutter.js" defer></script>
+
+    <!-- Firebase SDK -->
+    <script
+      src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"
+      defer
+    ></script>
+    <script
+      src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"
+      defer
+    ></script>
+    <script
+      src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"
+      defer
+    ></script>
+
+    <script>
+      // JavaScript Firebase 초기화 변수
+      var isFirebaseInitialized = false;
+      var isAdBlockDetected = false;
+      var loginResult = null;
+      var signupResult = null;
+      var signoutResult = null;
+      var resetPasswordResult = null;
+      var saveEmotionResult = null;
+      var getEmotionRecordsResult = null;
+      var getEmotionRecordsByDateResult = null;
+
+      // 결과 설정 헬퍼 함수
+      function setResult(resultVar, result) {
+        window[resultVar] = result;
+      }
+
+      // Firebase 초기화
+      document.addEventListener("DOMContentLoaded", function () {
+        try {
+          // Firebase 구성
+          const firebaseConfig = {
+            apiKey: "AIzaSyCQQBYxxotnD6NSx8MUQXlLipMEPMbqpjk",
+            authDomain: "emotionalquest.firebaseapp.com",
+            projectId: "emotionalquest",
+            storageBucket: "emotionalquest.appspot.com",
+            messagingSenderId: "851211720503",
+            appId: "1:851211720503:web:20a71d3e9c95e3bced9fd6",
+            measurementId: "G-9L3LREWHPJ",
+          };
+
+          // Firebase 초기화 - 페이지 로드 시에는 바로 초기화하지 않고 필요할 때 초기화하도록 변경
+          window.initializeFirebase = function () {
+            if (window.firebase && !isFirebaseInitialized) {
+              firebase.initializeApp(firebaseConfig);
+              console.log("Firebase 초기화 완료");
+              isFirebaseInitialized = true;
+              return true;
+            }
+            return isFirebaseInitialized;
+          };
+
+          // 사용자가 로그인 시도 시에만 Firebase 초기화
+          setTimeout(function () {
+            // 필요한 경우에만 초기화
+            if (
+              window.location.hash.includes("login") ||
+              window.location.hash.includes("signup")
+            ) {
+              window.initializeFirebase();
+            }
+          }, 2000);
+        } catch (error) {
+          console.error("Firebase 초기화 중 오류 발생:", error);
+          isFirebaseInitialized = false;
+        }
+      });
+
+      // AdBlock 경고 표시
+      function showAdBlockWarning() {
+        const warningDiv = document.createElement("div");
+        warningDiv.id = "adblock-warning";
+        warningDiv.style.position = "fixed";
+        warningDiv.style.bottom = "10px";
+        warningDiv.style.left = "10px";
+        warningDiv.style.backgroundColor = "#ff9800";
+        warningDiv.style.color = "white";
+        warningDiv.style.padding = "10px 15px";
+        warningDiv.style.borderRadius = "5px";
+        warningDiv.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+        warningDiv.style.zIndex = "9999";
+        warningDiv.style.fontFamily = "Arial, sans-serif";
+        warningDiv.style.fontSize = "14px";
+        warningDiv.innerHTML =
+          "⚠️ AdBlock이 감지되었습니다. 일부 기능이 제한될 수 있습니다. 로컬 저장소를 사용합니다.";
+
+        const closeButton = document.createElement("button");
+        closeButton.innerHTML = "×";
+        closeButton.style.marginLeft = "10px";
+        closeButton.style.background = "transparent";
+        closeButton.style.border = "none";
+        closeButton.style.color = "white";
+        closeButton.style.fontSize = "16px";
+        closeButton.style.cursor = "pointer";
+        closeButton.onclick = function () {
+          document.body.removeChild(warningDiv);
+        };
+
+        warningDiv.appendChild(closeButton);
+        document.body.appendChild(warningDiv);
+      }
+
+      // 이메일/비밀번호로 로그인
+      function signInWithEmailJS(email, password) {
+        console.log("JavaScript 로그인 시도:", email);
+
+        if (!isFirebaseInitialized) {
+          setResult("loginResult", {
+            success: false,
+            error: "Firebase가 초기화되지 않았습니다",
+            code: "firebase-not-initialized",
+          });
+          return;
+        }
+
+        firebase
+          .auth()
+          .signInWithEmailAndPassword(email, password)
+          .then((userCredential) => {
+            console.log("로그인 성공:", userCredential.user.uid);
+            setResult("loginResult", {
+              success: true,
+              user: {
+                uid: userCredential.user.uid,
+                email: userCredential.user.email,
+                displayName: userCredential.user.displayName,
+              },
+            });
+          })
+          .catch((error) => {
+            console.error("로그인 오류:", error);
+
+            // 오류 코드별 맞춤 메시지
+            let errorMessage = error.message || "로그인 실패";
+            if (
+              error.code === "auth/invalid-credential" ||
+              error.code === "auth/invalid-email"
+            ) {
+              errorMessage = "이메일 또는 비밀번호가 올바르지 않습니다";
+            } else if (error.code === "auth/user-disabled") {
+              errorMessage = "계정이 비활성화되었습니다";
+            } else if (error.code === "auth/user-not-found") {
+              errorMessage = "해당 이메일로 등록된 계정이 없습니다";
+            } else if (error.code === "auth/wrong-password") {
+              errorMessage = "비밀번호가 올바르지 않습니다";
+            } else if (error.code === "auth/too-many-requests") {
+              errorMessage =
+                "너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요";
+            }
+
+            setResult("loginResult", {
+              success: false,
+              error: errorMessage,
+              code: error.code || "unknown-error",
+            });
+          });
+      }
+
+      // 이메일/비밀번호로 회원가입
+      function signUpWithEmailJS(email, password) {
+        console.log("JavaScript 회원가입 시도:", email);
+
+        if (!isFirebaseInitialized) {
+          setResult("signupResult", {
+            success: false,
+            error: "Firebase가 초기화되지 않았습니다",
+            code: "firebase-not-initialized",
+          });
+          return;
+        }
+
+        firebase
+          .auth()
+          .createUserWithEmailAndPassword(email, password)
+          .then((userCredential) => {
+            console.log("회원가입 성공:", userCredential.user.uid);
+            setResult("signupResult", {
+              success: true,
+              user: {
+                uid: userCredential.user.uid,
+                email: userCredential.user.email,
+                displayName: userCredential.user.displayName,
+              },
+            });
+          })
+          .catch((error) => {
+            console.error("회원가입 오류:", error);
+            setResult("signupResult", {
+              success: false,
+              error: error.message || "회원가입 실패",
+              code: error.code || "unknown-error",
+            });
+          });
+      }
+
+      // 로그아웃
+      function signOutJS() {
+        console.log("JavaScript 로그아웃 시도");
+
+        if (!isFirebaseInitialized) {
+          setResult("signoutResult", {
+            success: false,
+            error: "Firebase가 초기화되지 않았습니다",
+            code: "firebase-not-initialized",
+          });
+          return;
+        }
+
+        firebase
+          .auth()
+          .signOut()
+          .then(() => {
+            console.log("로그아웃 성공");
+            setResult("signoutResult", {
+              success: true,
+            });
+          })
+          .catch((error) => {
+            console.error("로그아웃 오류:", error);
+            setResult("signoutResult", {
+              success: false,
+              error: error.message || "로그아웃 실패",
+              code: error.code || "unknown-error",
+            });
+          });
+      }
+
+      // 현재 사용자 가져오기
+      function getCurrentUserJS() {
+        console.log("JavaScript 현재 사용자 가져오기 시도");
+
+        if (!isFirebaseInitialized) {
+          setResult("currentUserResult", {
+            success: false,
+            error: "Firebase가 초기화되지 않았습니다",
+            code: "firebase-not-initialized",
+          });
+          return;
+        }
+
+        const user = firebase.auth().currentUser;
+
+        if (user) {
+          console.log("현재 사용자:", user.uid);
+          setResult("currentUserResult", {
+            success: true,
+            user: {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+            },
+          });
+        } else {
+          console.log("로그인된 사용자 없음");
+          setResult("currentUserResult", {
+            success: false,
+            error: "로그인된 사용자가 없습니다",
+            code: "no-user-logged-in",
+          });
+        }
+      }
+
+      // 비밀번호 재설정
+      function resetPasswordJS(email) {
+        console.log("JavaScript 비밀번호 재설정 시도:", email);
+
+        if (!isFirebaseInitialized) {
+          setResult("resetPasswordResult", {
+            success: false,
+            error: "Firebase가 초기화되지 않았습니다",
+            code: "firebase-not-initialized",
+          });
+          return;
+        }
+
+        firebase
+          .auth()
+          .sendPasswordResetEmail(email)
+          .then(() => {
+            console.log("비밀번호 재설정 이메일 전송됨");
+            setResult("resetPasswordResult", {
+              success: true,
+            });
+          })
+          .catch((error) => {
+            console.error("비밀번호 재설정 오류:", error);
+            setResult("resetPasswordResult", {
+              success: false,
+              error: error.message || "비밀번호 재설정 실패",
+              code: error.code || "unknown-error",
+            });
+          });
+      }
+
+      // 감정 기록 저장
+      function saveEmotionRecordJS(recordJson) {
+        console.log("JavaScript 감정 기록 저장 시도");
+
+        try {
+          // 기록 파싱
+          const record = JSON.parse(recordJson);
+
+          if (!isFirebaseInitialized || isAdBlockDetected) {
+            console.log("Firebase 사용 불가 - 로컬 저장소 사용");
+
+            // 로컬 저장소에 저장
+            const records = JSON.parse(
+              localStorage.getItem("emotion_records") || "[]"
+            );
+            record.id = "local_" + Date.now();
+            record.userId = firebase.auth().currentUser?.uid || "anonymous";
+            records.push(record);
+            localStorage.setItem("emotion_records", JSON.stringify(records));
+
+            setResult("saveEmotionResult", {
+              success: true,
+              isLocal: true,
+              id: record.id,
+            });
+            return;
+          }
+
+          // Firebase에 저장
+          const db = firebase.firestore();
+          const currentUser = firebase.auth().currentUser;
+
+          if (!currentUser) {
+            setResult("saveEmotionResult", {
+              success: false,
+              error: "사용자가 로그인되어 있지 않습니다",
+              code: "no-user-logged-in",
+            });
+            return;
+          }
+
+          // 저장할 데이터 준비
+          const data = {
+            userId: currentUser.uid,
+            emotion: record.emotion,
+            emoji: record.emoji,
+            timestamp: record.timestamp,
+            details: record.details || "",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+
+          // Firestore에 저장
+          db.collection("emotion_records")
+            .add(data)
+            .then((docRef) => {
+              console.log("감정 기록 저장 성공:", docRef.id);
+              setResult("saveEmotionResult", {
+                success: true,
+                id: docRef.id,
+              });
+            })
+            .catch((error) => {
+              console.error("Firestore 저장 오류:", error);
+
+              // AdBlock 오류 감지
+              if (
+                error.code === "unavailable" ||
+                error.message.includes("fetch") ||
+                error.message.includes("network error") ||
+                error.message.includes("ERR_BLOCKED")
+              ) {
+                console.log("네트워크 오류 또는 AdBlock - 로컬 저장소 사용");
+
+                // 로컬 저장소에 저장
+                const records = JSON.parse(
+                  localStorage.getItem("emotion_records") || "[]"
+                );
+                record.id = "local_" + Date.now();
+                record.userId = currentUser.uid;
+                records.push(record);
+                localStorage.setItem(
+                  "emotion_records",
+                  JSON.stringify(records)
+                );
+
+                setResult("saveEmotionResult", {
+                  success: true,
+                  isLocal: true,
+                  id: record.id,
+                });
+              } else {
+                // 기타 오류
+                setResult("saveEmotionResult", {
+                  success: false,
+                  error: error.message || "감정 기록 저장 실패",
+                  code: error.code || "unknown-error",
+                });
+              }
+            });
+        } catch (error) {
+          console.error("감정 기록 처리 오류:", error);
+          setResult("saveEmotionResult", {
+            success: false,
+            error: error.message || "감정 기록 처리 중 오류 발생",
+            code: "record-processing-error",
+          });
+        }
+      }
+
+      // 모든 감정 기록 가져오기
+      function getEmotionRecordsJS(userId) {
+        console.log("JavaScript 감정 기록 가져오기 시도:", userId);
+
+        // 로컬 저장소 기록 가져오기
+        function getLocalRecords() {
+          try {
+            const allRecords = JSON.parse(
+              localStorage.getItem("emotion_records") || "[]"
+            );
+            return allRecords.filter(
+              (record) => !userId || record.userId === userId
+            );
+          } catch (error) {
+            console.error("로컬 저장소 조회 오류:", error);
+            return [];
+          }
+        }
+
+        if (!isFirebaseInitialized || isAdBlockDetected) {
+          console.log("Firebase 사용 불가 - 로컬 저장소 사용");
+          const localRecords = getLocalRecords();
+
+          setResult("getEmotionRecordsResult", {
+            success: true,
+            isLocal: true,
+            records: localRecords,
+          });
+          return;
+        }
+
+        // Firestore에서 가져오기
+        const db = firebase.firestore();
+
+        db.collection("emotion_records")
+          .where("userId", "==", userId)
+          .orderBy("timestamp", "desc")
+          .get()
+          .then((querySnapshot) => {
+            const records = [];
+
+            querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              records.push({
+                id: doc.id,
+                userId: data.userId,
+                emotion: data.emotion,
+                emoji: data.emoji,
+                timestamp: data.timestamp,
+                details: data.details || "",
+              });
+            });
+
+            console.log(`${records.length}개의 감정 기록 가져옴`);
+            setResult("getEmotionRecordsResult", {
+              success: true,
+              records: records,
+            });
+          })
+          .catch((error) => {
+            console.error("감정 기록 가져오기 오류:", error);
+
+            // AdBlock 오류 감지
+            if (
+              error.code === "unavailable" ||
+              error.message.includes("fetch") ||
+              error.message.includes("network error") ||
+              error.message.includes("ERR_BLOCKED")
+            ) {
+              console.log("네트워크 오류 또는 AdBlock - 로컬 저장소 사용");
+              const localRecords = getLocalRecords();
+
+              setResult("getEmotionRecordsResult", {
+                success: true,
+                isLocal: true,
+                records: localRecords,
+              });
+            } else {
+              setResult("getEmotionRecordsResult", {
+                success: false,
+                error: error.message || "감정 기록 가져오기 실패",
+                code: error.code || "unknown-error",
+              });
+            }
+          });
+      }
+
+      // 날짜별 감정 기록 가져오기
+      function getEmotionRecordsByDateJS(userId, startDate, endDate) {
+        console.log(
+          "JavaScript 날짜별 감정 기록 가져오기 시도:",
+          userId,
+          startDate,
+          endDate
+        );
+
+        // 로컬 저장소 기록 가져오기
+        function getLocalRecordsByDate() {
+          try {
+            const allRecords = JSON.parse(
+              localStorage.getItem("emotion_records") || "[]"
+            );
+            const startTimestamp = new Date(startDate).getTime();
+            const endTimestamp = new Date(endDate).getTime();
+
+            return allRecords.filter((record) => {
+              const recordDate = new Date(record.timestamp).getTime();
+              return (
+                (!userId || record.userId === userId) &&
+                recordDate >= startTimestamp &&
+                recordDate <= endTimestamp
+              );
+            });
+          } catch (error) {
+            console.error("로컬 저장소 날짜별 조회 오류:", error);
+            return [];
+          }
+        }
+
+        if (!isFirebaseInitialized || isAdBlockDetected) {
+          console.log("Firebase 사용 불가 - 로컬 저장소 사용");
+          const localRecords = getLocalRecordsByDate();
+
+          setResult("getEmotionRecordsByDateResult", {
+            success: true,
+            isLocal: true,
+            records: localRecords,
+          });
+          return;
+        }
+
+        // Firestore에서 가져오기
+        const db = firebase.firestore();
+
+        db.collection("emotion_records")
+          .where("userId", "==", userId)
+          .where("timestamp", ">=", startDate)
+          .where("timestamp", "<=", endDate)
+          .orderBy("timestamp", "desc")
+          .get()
+          .then((querySnapshot) => {
+            const records = [];
+
+            querySnapshot.forEach((doc) => {
+              const data = doc.data();
+              records.push({
+                id: doc.id,
+                userId: data.userId,
+                emotion: data.emotion,
+                emoji: data.emoji,
+                timestamp: data.timestamp,
+                details: data.details || "",
+              });
+            });
+
+            console.log(`${records.length}개의 날짜별 감정 기록 가져옴`);
+            setResult("getEmotionRecordsByDateResult", {
+              success: true,
+              records: records,
+            });
+          })
+          .catch((error) => {
+            console.error("날짜별 감정 기록 가져오기 오류:", error);
+
+            // AdBlock 오류 감지
+            if (
+              error.code === "unavailable" ||
+              error.message.includes("fetch") ||
+              error.message.includes("network error") ||
+              error.message.includes("ERR_BLOCKED")
+            ) {
+              console.log("네트워크 오류 또는 AdBlock - 로컬 저장소 사용");
+              const localRecords = getLocalRecordsByDate();
+
+              setResult("getEmotionRecordsByDateResult", {
+                success: true,
+                isLocal: true,
+                records: localRecords,
+              });
+            } else {
+              setResult("getEmotionRecordsByDateResult", {
+                success: false,
+                error: error.message || "날짜별 감정 기록 가져오기 실패",
+                code: error.code || "unknown-error",
+              });
+            }
+          });
+      }
+    </script>
+  </head>
+  <body>
+    <style>
+      /* 화면 전체를 채우는 로딩 컨테이너 */
+      .loading-container {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background-color: #1e1e1e;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        opacity: 1;
+        transition: opacity 0.5s ease-in-out;
+      }
+
+      /* 로딩 애니메이션 */
+      .loading-heart {
+        width: 80px;
+        height: 80px;
+        animation: heartbeat 1.5s infinite;
+        color: #ff6b6b;
+      }
+
+      /* 로고 */
+      .loading-logo {
+        color: white;
+        font-family: "Arial", sans-serif;
+        font-size: 24px;
+        margin-top: 16px;
+        font-weight: bold;
+      }
+
+      /* 로딩 텍스트 */
+      .loading-text {
+        color: #b3b3b3;
+        margin-top: 8px;
+        font-family: "Arial", sans-serif;
+        font-size: 14px;
+      }
+
+      /* 하트 애니메이션 */
+      @keyframes heartbeat {
+        0% {
+          transform: scale(1);
+        }
+        25% {
+          transform: scale(1.1);
+        }
+        50% {
+          transform: scale(1);
+        }
+        75% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      /* 브라우저 크기에 맞게 스타일 조정 */
+      @media (max-width: 600px) {
+        .loading-heart {
+          width: 60px;
+          height: 60px;
+        }
+        .loading-logo {
+          font-size: 20px;
+        }
+        .loading-text {
+          font-size: 12px;
+        }
+      }
+    </style>
+
+    <!-- 로딩 화면 -->
+    <div id="loading" class="loading-container">
+      <svg class="loading-heart" viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        />
+      </svg>
+      <div class="loading-logo">감정 퀘스트</div>
+      <div class="loading-text">로딩 중...</div>
+    </div>
+
+    <script>
+      // Flutter 초기화 전에 전역 변수 설정
+      window.currentUser = null;
+
+      // Flutter 웹 초기화
+      window.addEventListener("load", function () {
+        // 로딩 요소 참조
+        var loading = document.getElementById("loading");
+        var loadingTimeout;
+
+        // 로딩 화면 제거 함수
+        function removeLoading() {
+          clearTimeout(loadingTimeout);
+          if (loading) {
+            loading.style.opacity = "0";
+            setTimeout(function () {
+              if (loading && loading.parentNode) {
+                loading.parentNode.removeChild(loading);
+              }
+            }, 500);
+          }
+        }
+
+        // 로딩 타임아웃 설정 (10초 후 강제 제거)
+        loadingTimeout = setTimeout(function () {
+          console.log("로딩 타임아웃 - 강제로 로딩 화면 제거");
+          removeLoading();
+        }, 10000);
+
+        // Flutter 초기화 함수
+        function initializeFlutter(loader) {
+          console.log("Flutter 초기화 시도 중...");
+
+          if (!loader) {
+            console.error("Flutter 로더가 없습니다");
+            removeLoading();
+            return;
+          }
+
+          try {
+            loader.loadEntrypoint({
+              serviceWorker: {
+                serviceWorkerVersion: serviceWorkerVersion,
+              },
+              onEntrypointLoaded: function (engineInitializer) {
+                engineInitializer
+                  .initializeEngine()
+                  .then(function (appRunner) {
+                    console.log("Flutter 엔진 초기화 성공, 앱 실행 중...");
+                    appRunner.runApp();
+                    // 앱이 실행된 후 로딩 화면 제거
+                    setTimeout(removeLoading, 1000);
+                  })
+                  .catch(function (error) {
+                    console.error("Flutter 엔진 초기화 실패:", error);
+                    removeLoading();
+                  });
+              },
+            });
+          } catch (error) {
+            console.error("Flutter 초기화 중 오류 발생:", error);
+            removeLoading();
+          }
+        }
+
+        // Flutter.js 로딩 확인
+        var attempts = 0;
+        var checkFlutter = setInterval(function () {
+          attempts++;
+
+          // 여러 방식으로 Flutter 로더 찾기 시도
+          var flutterLoader = null;
+
+          if (typeof window.flutter !== "undefined") {
+            console.log("window.flutter 발견");
+            flutterLoader = window.flutter.loader;
+          } else if (typeof window._flutter !== "undefined") {
+            console.log("window._flutter 발견");
+            flutterLoader = window._flutter.loader;
+          }
+
+          if (flutterLoader) {
+            clearInterval(checkFlutter);
+            console.log("Flutter 로더 발견, 초기화 시작");
+            initializeFlutter(flutterLoader);
+          } else if (attempts > 50) {
+            // 5초 후 포기
+            clearInterval(checkFlutter);
+            console.error("5초 후에도 Flutter 로더를 찾을 수 없습니다");
+            console.log(
+              "window 객체 내 속성들:",
+              Object.keys(window).filter((key) => key.includes("flutter"))
+            );
+            removeLoading();
+          } else if (attempts % 10 === 0) {
+            console.log("Flutter 로더 찾는 중... 시도 횟수:", attempts);
+          }
+        }, 100);
+      });
+    </script>
+  </body>
+</html>

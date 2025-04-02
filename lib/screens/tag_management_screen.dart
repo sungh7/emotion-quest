@@ -16,6 +16,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   
   List<String> _allTags = [];
   bool _isLoading = true;
+  final TextEditingController _newTagController = TextEditingController();
   
   @override
   void initState() {
@@ -27,6 +28,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   void dispose() {
     _tagController.dispose();
     _tagFocusNode.dispose();
+    _newTagController.dispose();
     super.dispose();
   }
   
@@ -177,150 +179,128 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           ),
         ),
         body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadTags,
-              child: Column(
+            ? Center(child: CircularProgressIndicator())
+            : Column(
                 children: [
-                  // 태그 추가 폼
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '새 태그 추가',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _tagController,
-                                  focusNode: _tagFocusNode,
-                                  decoration: const InputDecoration(
-                                    labelText: '태그 이름',
-                                    hintText: '예: 업무, 가족, 건강, 여행',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '태그 이름을 입력해주세요';
-                                    }
-                                    return null;
-                                  },
-                                  onFieldSubmitted: (_) => _addTag(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              ElevatedButton(
-                                onPressed: _addTag,
-                                style: ElevatedButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                    horizontal: 16,
-                                  ),
-                                ),
-                                child: const Text('추가'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const Divider(),
-                  
-                  // 태그 목록 타이틀
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
                       children: [
-                        const Text(
-                          '내 태그 목록',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: TextField(
+                            controller: _newTagController,
+                            decoration: InputDecoration(
+                              labelText: '새 태그',
+                              hintText: '추가할 태그를 입력하세요',
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
-                        const Spacer(),
-                        Text(
-                          '${_allTags.length}개',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.bold,
-                          ),
+                        SizedBox(width: 16),
+                        ElevatedButton(
+                          onPressed: _addTag,
+                          child: Text('추가'),
                         ),
                       ],
                     ),
                   ),
-                  
-                  // 기본 태그와 사용자 정의 태그 표시
+                  Divider(),
                   Expanded(
-                    child: _allTags.isEmpty
-                      ? const Center(
-                          child: Text(
-                            '아직 등록된 태그가 없습니다\n태그를 추가해보세요!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          itemCount: _allTags.length,
-                          separatorBuilder: (context, index) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final tag = _allTags[index];
-                            final emotionService = Provider.of<EmotionService>(context, listen: false);
-                            final isDefaultTag = emotionService.defaultTags.contains(tag);
-                            
-                            return ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                Icons.tag,
-                                color: isDefaultTag ? theme.colorScheme.primary : null,
-                              ),
-                              title: Text(
-                                tag,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: isDefaultTag ? theme.colorScheme.primary : null,
-                                ),
-                              ),
-                              trailing: isDefaultTag
-                                ? const Chip(
-                                    label: Text('기본', style: TextStyle(fontSize: 12)),
-                                    padding: EdgeInsets.zero,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  )
-                                : IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () => _deleteTag(tag),
-                                    tooltip: '태그 삭제',
-                                    color: Colors.red[400],
-                                  ),
-                            );
-                          },
-                        ),
+                    child: ListView.builder(
+                      itemCount: _allTags.length,
+                      itemBuilder: (context, index) {
+                        final tag = _allTags[index];
+                        return ListTile(
+                          title: Text(tag),
+                          leading: Icon(Icons.tag),
+                          trailing: _defaultTags.contains(tag)
+                              ? Chip(label: Text('기본'))
+                              : null,
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-            ),
       ),
     );
   }
+
+  List<String> _defaultTags = ['가족', '친구', '직장', '건강', '취미', '학업'];
+
+  void _filterTags(String query) {
+    setState(() {
+      _searchQuery = query;
+    });
+  }
+
+  List<String> _getFilteredDefaultTags() {
+    // TODO: EmotionService에 defaultTags 게터 추가 필요
+    // final defaultTags = Provider.of<EmotionService>(context, listen: false).defaultTags;
+    final defaultTags = ['업무', '가족', '친구', '건강', '취미']; // 임시 데이터
+    if (_searchQuery.isEmpty) {
+      return defaultTags;
+    }
+    return defaultTags.where((tag) => 
+      tag.toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
+
+  List<String> _getFilteredCustomTags() {
+    if (_searchQuery.isEmpty) {
+      return _allTags;
+    }
+    return _allTags.where((tag) => 
+      tag.toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
+
+  void _addNewTag() async {
+    final newTag = _newTagController.text.trim();
+    if (newTag.isEmpty) return;
+
+    // 이미 존재하는 태그인지 확인
+    if (_allTags.contains(newTag)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('이미 존재하는 태그입니다: $newTag')),
+      );
+      return;
+    }
+
+    setState(() {
+      _allTags.add(newTag);
+      _newTagController.clear();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('새 태그가 추가되었습니다: $newTag')),
+    );
+  }
+
+  void _deleteTag(String tag) {
+    setState(() {
+      _allTags.remove(tag);
+    });
+  }
+
+  /*
+  // TODO: EmotionService에 태그 저장 로직 구현 후 주석 해제
+  Future<void> _saveTags() async {
+    final emotionService = Provider.of<EmotionService>(context, listen: false);
+    try {
+      // final success = await emotionService.saveCustomTags(_allTags);
+      // if (!success && mounted) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(content: Text('태그 저장 중 오류 발생'), backgroundColor: Colors.red),
+      //   );
+      // }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('태그 저장 오류: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+  */
 } 

@@ -428,8 +428,10 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   }
   
   String _getDayName(int day) {
-    const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-    return days[day];
+    // 요일 인덱스 보정 - 0: 월요일, 6: 일요일 
+    final normalizedDay = day % 7;
+    const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+    return days[normalizedDay];
   }
   
   List<FlSpot> _getDefaultSpots() {
@@ -514,6 +516,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                         ),
                       ),
                       
+                      // 감정 분포 차트 추가
+                      _buildEmotionDistributionSection(),
+                      
                       // Trends 섹션 - 기존 코드에 트렌드 인사이트 추가
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
@@ -564,22 +569,8 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                 ),
                                 const SizedBox(height: 16),
                                 SizedBox(
-                                  height: 180,
-                                  child: _buildLineChart(context),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                  children: [
-                                    'M', 'T', 'W', 'T', 'F', 'S', 'S'
-                                  ].map((day) => Text(
-                                    day,
-                                    style: const TextStyle(
-                                      color: Color(0xFF637588),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )).toList(),
+                                  height: 200,
+                                  child: _buildTrendsChart(),
                                 ),
                               ],
                             ),
@@ -688,157 +679,219 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     );
   }
   
-  Widget _buildLineChart(BuildContext context) {
-    // 주간 데이터가 없으면 기본 데이터 사용
-    final spots = _weeklyMoodSpots.isEmpty ? _getDefaultSpots() : _weeklyMoodSpots;
-    
-    // 로그 추가
-    print('차트 데이터 포인트: ${spots.length}개');
-    for (var spot in spots) {
-      print('데이터 포인트: (${spot.x}, ${spot.y})');
+  Widget _buildTrendsChart() {
+    if (_records.isEmpty) {
+      return const Center(
+        child: Text(
+          '감정 기록이 부족합니다.\n더 많은 감정을 기록해보세요!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
+          ),
+        ),
+      );
     }
-    
+
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final areaColor = isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFF0F2F4);
-    final lineColor = isDarkMode ? Colors.lightBlue : const Color(0xFF637588);
-    final textColor = isDarkMode ? Colors.white.withOpacity(0.9) : const Color(0xFF637588);
+    final lineColor = isDarkMode 
+      ? Colors.greenAccent 
+      : const Color(0xFF5AC8FA);
+    final areaColor = isDarkMode 
+      ? Colors.teal.withOpacity(0.5) 
+      : const Color(0xFF5AC8FA).withOpacity(0.5);
     
+    var spots = _weeklyMoodSpots.isNotEmpty
+      ? _weeklyMoodSpots 
+      : _getDefaultSpots();
+      
+    // 요일 레이블
+    final labels = ['월', '화', '수', '목', '금', '토', '일'];
+      
+    // 스크롤 가능한 컨테이너로 감싸기
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 180,
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: true,
-                horizontalInterval: 1,
-                drawVerticalLine: false,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
-                    strokeWidth: 1,
-                    dashArray: [5, 5],
-                  );
-                },
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 25,
-                    getTitlesWidget: (value, meta) {
-                      const titles = ['월', '화', '수', '목', '금', '토', '일'];
-                      if (value >= 0 && value < titles.length) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            titles[value.toInt()],
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 12,
-                            ),
-                          ),
-                        );
-                      }
-                      return const Text('');
-                    },
-                  ),
-                ),
-                leftTitles: const AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: false,
-                  ),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: false,
-                  ),
-                ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: false,
-                  ),
-                ),
-              ),
-              borderData: FlBorderData(
-                show: false,
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  color: lineColor,
-                  barWidth: 3,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(
-                    show: true,
-                    getDotPainter: (spot, percent, barData, index) {
-                      return FlDotCirclePainter(
-                        radius: 4,
-                        color: lineColor,
-                        strokeWidth: 2,
-                        strokeColor: isDarkMode ? Colors.black : Colors.white,
-                      );
-                    },
-                  ),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    color: areaColor.withOpacity(0.5),
-                  ),
-                ),
-              ],
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchTooltipData: LineTouchTooltipData(
-                  tooltipRoundedRadius: 8,
-                  getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                    return touchedBarSpots.map((barSpot) {
-                      final sentiment = _getSentimentLabel(barSpot.y);
-                      return LineTooltipItem(
-                        sentiment,
-                        TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-              minX: 0,
-              maxX: 6,
-              minY: 0,
-              maxY: 5,
+        const Padding(
+          padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
+          child: Text(
+            '주간 감정 변화',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
         
-        // 아래 요일 레이블 표시
+        // 그래프의 높이를 제한하고 패딩 감소
+        SizedBox(
+          height: 160, // 더 줄임
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4), // 더 줄임
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 1,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 16, // 더 줄임
+                      interval: 1, // 모든 값에 대해 레이블 표시 (간격 1)
+                      getTitlesWidget: (double value, TitleMeta meta) {
+                        // 0~6 범위(월~일)만 표시
+                        final index = value.toInt();
+                        // 그래프 영역을 벗어나는 레이블 숨기기 (중복 방지)
+                        if (index < 0 || index >= labels.length || index != value) {
+                          return const SizedBox.shrink();
+                        }
+                        
+                        return SideTitleWidget(
+                          space: 4, // 간격 줄임
+                          axisSide: meta.axisSide,
+                          child: Text(
+                            labels[index],
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10, // 크기 조정
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (double value, TitleMeta meta) {
+                        String text = '';
+                        switch (value.toInt()) {
+                          case 1:
+                            text = '😔';
+                            break;
+                          case 3:
+                            text = '😐';
+                            break;
+                          case 5:
+                            text = '😊';
+                            break;
+                          default:
+                            return const SizedBox.shrink();
+                        }
+                        return SideTitleWidget(
+                          space: 4, // 간격 줄임
+                          axisSide: meta.axisSide,
+                          child: Text(
+                            text,
+                            style: const TextStyle(
+                              fontSize: 14, // 이모지는 조금 크게
+                            ),
+                          ),
+                        );
+                      },
+                      reservedSize: 24, // 크기 줄임
+                    ),
+                  ),
+                  rightTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                borderData: FlBorderData(
+                  show: false,
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    color: lineColor,
+                    barWidth: 2, // 선 두께 줄임
+                    isStrokeCapRound: true,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) {
+                        return FlDotCirclePainter(
+                          radius: 3, // 점 크기 줄임
+                          color: lineColor,
+                          strokeWidth: 1, // 테두리 두께 줄임
+                          strokeColor: isDarkMode ? Colors.black : Colors.white,
+                        );
+                      },
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: areaColor.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    tooltipRoundedRadius: 6,
+                    getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                      return touchedBarSpots.map((barSpot) {
+                        final sentiment = _getSentimentLabel(barSpot.y);
+                        final dayIndex = barSpot.x.toInt();
+                        final dayLabel = dayIndex >= 0 && dayIndex < labels.length 
+                            ? labels[dayIndex] 
+                            : '';
+                        return LineTooltipItem(
+                          '$dayLabel: $sentiment',
+                          TextStyle(
+                            color: isDarkMode ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10, // 더 줄임
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
+                minX: 0,
+                maxX: 6,
+                minY: 0,
+                maxY: 5,
+              ),
+            ),
+          ),
+        ),
+        
+        // 요일 레이블 범례 추가 (x축 중복 방지)
         Padding(
-          padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+          padding: const EdgeInsets.only(top: 8, left: 8, right: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Text('월', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('화', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('수', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('목', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('금', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('토', style: TextStyle(color: textColor, fontSize: 11)),
-              Text('일', style: TextStyle(color: textColor, fontSize: 11)),
-            ],
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: labels.map((label) => Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+              ),
+            )).toList(),
           ),
         ),
         
         if (_trendInsight.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 8, left: 16, right: 16), // 패딩 줄임
             child: Text(
               _trendInsight,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 11, // 더 줄임
                 fontStyle: FontStyle.italic,
                 color: _isMoodImproving 
                   ? (isDarkMode ? Colors.green[300] : Colors.green[700])
@@ -917,9 +970,9 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   // 트렌드 상세 정보를 보여주는 바텀 시트
   Widget _buildTrendDetailSheet(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : const Color(0xFF111418);
     final backgroundColor = isDarkMode ? const Color(0xFF121212) : Colors.white;
-    
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+
     return Container(
       padding: const EdgeInsets.all(20),
       color: backgroundColor,
@@ -953,10 +1006,11 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             ),
           ),
           const SizedBox(height: 8),
-          // 요일별 데이터 시각화
+          // 요일별 데이터 시각화 - 수정된 요일 레이블 사용
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [0, 1, 2, 3, 4, 5, 6].map((day) {
+            children: List.generate(7, (day) {
+              final labels = ['월', '화', '수', '목', '금', '토', '일'];
               final score = _weeklyMoodSpots.isNotEmpty 
                   ? _weeklyMoodSpots[day].y 
                   : 3.0;
@@ -973,7 +1027,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _getDayName(day).substring(0, 1), // 첫 글자만
+                    labels[day], // 수정된 방식으로 요일 표시
                     style: TextStyle(
                       color: textColor,
                       fontWeight: FontWeight.bold,
@@ -981,7 +1035,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                   ),
                 ],
               );
-            }).toList(),
+            }),
           ),
         ],
       ),
@@ -1604,6 +1658,212 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                 ),
         ),
       ],
+    );
+  }
+
+  // 감정 분포 파이 차트
+  Widget _buildEmotionDistributionChart() {
+    // 감정 데이터가 없는 경우
+    if (_records.isEmpty) {
+      return const Center(
+        child: Text(
+          '감정 기록이 없습니다.\n감정을 기록해보세요!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey,
+          ),
+        ),
+      );
+    }
+
+    // 감정별 카운트
+    Map<String, int> emotionCounts = {};
+    for (var record in _records) {
+      emotionCounts[record.emotion] = (emotionCounts[record.emotion] ?? 0) + 1;
+    }
+
+    // 차트 데이터 생성
+    List<PieChartSectionData> sections = [];
+    List<Map<String, dynamic>> legendItems = [];
+
+    // 감정별 색상 맵
+    final emotionColors = {
+      '행복': Colors.yellow[600]!,
+      '기쁨': Colors.orange[300]!,
+      '사랑': Colors.pink[300]!,
+      '화남': Colors.red[400]!,
+      '슬픔': Colors.blue[400]!,
+      '불안': Colors.purple[300]!,
+      '무기력': Colors.grey[500]!,
+      '지루함': Colors.brown[300]!,
+    };
+
+    // 모든 감정에 대한 이모지 맵 확장
+    final Map<String, String> allEmojiMap = {
+      ..._emojiMap,
+      '행복': '😊',
+      '기쁨': '😄',
+      '사랑': '🥰',
+      '화남': '😡',
+      '슬픔': '😢',
+      '불안': '😰',
+      '무기력': '😴',
+      '지루함': '🙄',
+      '평온': '😌',
+      '놀람': '😲',
+      '혐오': '🤢',
+      '두려움': '😨',
+      '우울': '😔',
+      '흥분': '🤩',
+      '설렘': '😍',
+      '만족': '😊',
+      '감사': '🙏',
+    };
+
+    // 감정별 카운트를 퍼센트로 변환
+    final total = emotionCounts.values.fold(0, (sum, count) => sum + count);
+
+    // 섹션 데이터 생성 (내림차순 정렬)
+    emotionCounts.entries
+        .toList()
+        .sort((a, b) => b.value.compareTo(a.value));
+
+    int colorIndex = 0;
+    for (var entry in emotionCounts.entries) {
+      final emotion = entry.key;
+      final count = entry.value;
+      final percent = count / total * 100;
+
+      // 감정에 맞는 이모지 찾기 (확장된 맵 사용)
+      final emoji = allEmojiMap[emotion] ?? '🙂';
+
+      // 색상 가져오기 (정의되지 않은 감정은 기본 색상 사용)
+      final color = emotionColors[emotion] ?? 
+          Colors.primaries[colorIndex % Colors.primaries.length];
+      colorIndex++;
+
+      // 섹션 생성
+      final section = PieChartSectionData(
+        color: color,
+        value: count.toDouble(),
+        title: emoji, // 이모지를 타이틀로 설정
+        radius: 60,
+        titleStyle: const TextStyle(
+          fontSize: 24, // 이모지 크기 키움
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+        badgePositionPercentageOffset: 0,
+        titlePositionPercentageOffset: 0.55, // 중앙에 가깝게 배치
+      );
+
+      sections.add(section);
+
+      // 범례 아이템 추가
+      legendItems.add({
+        'emotion': emotion,
+        'emoji': emoji, // 확장된 이모지 맵 사용
+        'percent': percent,
+        'count': count,
+        'color': color,
+      });
+    }
+
+    return Column(
+      children: [
+        // 차트 높이 증가
+        SizedBox(
+          height: 300,
+          width: double.infinity,
+          child: PieChart(
+            PieChartData(
+              sections: sections,
+              centerSpaceRadius: 30, // 더 작게 하여 섹션 공간 확보
+              sectionsSpace: 2,
+              pieTouchData: PieTouchData(
+                touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                  // 터치 응답 처리
+                },
+                enabled: true,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12), // 간격 줄임
+        // 범례 추가
+        Wrap(
+          spacing: 10, // 간격 줄임
+          runSpacing: 10, // 간격 줄임
+          alignment: WrapAlignment.center,
+          children: legendItems.map((item) => _buildLegendItem(item)).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLegendItem(Map<String, dynamic> item) {
+    final percent = item['percent'] as double;
+    final count = item['count'] as int;
+    
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: item['color'] as Color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          item['emoji'] as String,
+          style: const TextStyle(fontSize: 16),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '${item['emotion']} ${percent.toStringAsFixed(1)}% ($count)',
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmotionDistributionSection() {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Theme.of(context).brightness == Brightness.dark 
+            ? const Color(0xFF2C2C2C) 
+            : const Color(0xFFDCE0E5), 
+            width: 1),
+      ),
+      color: Theme.of(context).brightness == Brightness.dark 
+          ? const Color(0xFF1E1E1E) 
+          : const Color(0xFFF0F2F4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Emotion Distribution',
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.white 
+                    : const Color(0xFF111418),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildEmotionDistributionChart(),
+          ],
+        ),
+      ),
     );
   }
 }

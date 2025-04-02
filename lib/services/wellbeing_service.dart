@@ -268,7 +268,7 @@ class WellbeingService extends ChangeNotifier {
       if (FirebaseService.currentUser != null) {
         try {
           final result = await FirebaseService.saveDigitalWellbeingData(data.toJson());
-          if (result['success'] == true && result['id'] != null) {
+          if (result is Map && result['success'] == true && result['id'] != null) {
             // ID 업데이트
             final updatedData = data.copyWith(id: result['id']);
             _dataByDate[dateKey] = updatedData;

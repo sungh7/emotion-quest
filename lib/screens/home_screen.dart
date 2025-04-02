@@ -1,594 +1,1139 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/emotion_record.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/emotion_service.dart';
-import '../services/firebase_service.dart';
-import '../services/theme_service.dart';
-import '../screens/emotion_detail_screen.dart';
-import '../screens/custom_emotion_screen.dart';
-import '../screens/tag_management_screen.dart';
-import '../screens/quest_screen.dart';
 import '../services/quest_service.dart';
-import '../screens/profile_screen.dart';
+import '../services/firebase_service.dart';
+import '../services/game_service.dart';
+import '../models/emotion_record.dart';
+import 'report_screen.dart';
+import 'wellbeing_screen.dart';
+import 'quest_screen.dart';
+import 'profile_screen.dart';
+import 'auth_screen.dart';
+import 'custom_emotion_screen.dart';
+import 'emotion_quest_screen.dart';
+import '../services/theme_service.dart';
+import '../models/quest.dart' show Quest;
+import 'package:intl/intl.dart';
+import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:html' as html;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final int initialIndex;
+  const HomeScreen({Key? key, this.initialIndex = 0}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  final TextEditingController _detailsController = TextEditingController();
-  bool _isSaving = false;
-  bool _isFirebaseInitialized = false;
-  String _selectedEmotion = '';
-  String _selectedEmotionEmoji = '';
-  Set<String> _selectedTags = {};
-  late TabController _tabController;
-  int _currentIndex = 0;
-  
-  // 정의된 감정 목록
-  final List<Map<String, String>> emotions = [
-    {'emotion': '행복', 'emoji': '😊'},
-    {'emotion': '기쁨', 'emoji': '😄'},
-    {'emotion': '사랑', 'emoji': '🥰'},
-    {'emotion': '화남', 'emoji': '😡'},
-    {'emotion': '슬픔', 'emoji': '😢'},
-    {'emotion': '불안', 'emoji': '😰'},
-    {'emotion': '무기력', 'emoji': '😴'},
-    {'emotion': '지루함', 'emoji': '🙄'},
-  ];
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
+  bool _authChecked = false;
+  bool _isLoggedIn = false;
+  bool _isLoading = true;
   
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      setState(() {
-        _currentIndex = _tabController.index;
-      });
-    });
-    _checkFirebaseStatus();
+    _selectedIndex = widget.initialIndex;
+    _checkAuthState();
+    _loadData();
   }
   
-  @override
-  void dispose() {
-    _detailsController.dispose();
-    _tabController.dispose();
-    super.dispose();
-  }
-  
-  // Firebase 상태 확인
-  void _checkFirebaseStatus() {
-    try {
-      // FirebaseService 상태 확인
-      final auth = FirebaseService.auth;
-      setState(() {
-        _isFirebaseInitialized = true;
+  void _checkAuthState() {
+    if (FirebaseService.currentUser == null) {
+      Future.delayed(Duration.zero, () {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const AuthScreen())
+        );
       });
-    } catch (e) {
-      print('Firebase 상태 확인 오류: $e');
+    } else {
       setState(() {
-        _isFirebaseInitialized = false;
+        _authChecked = true;
       });
     }
   }
-
-  // 사용자 정의 감정 화면으로 이동
-  void _navigateToCustomEmotionScreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CustomEmotionScreen()),
-    );
+  
+  Future<void> _loadData() async {
+    final emotionService = Provider.of<EmotionService>(context, listen: false);
+    final questService = Provider.of<QuestService>(context, listen: false);
+    final gameService = Provider.of<GameService>(context, listen: false);
+    
+    // 사용자 인증 상태 확인
+    final user = FirebaseService.currentUser;
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = user != null;
+        _isLoading = true;
+      });
+    }
+    
+    if (user != null) {
+      // 커스텀 감정 로드
+      await emotionService.loadCustomEmotions();
+      
+      // 감정 기록 로드
+      await emotionService.loadEmotionRecords();
+      
+      // 퀘스트 로드 (내부에서 loadProgress() 호출)
+      await questService.loadQuests();
+      
+      // 게임 데이터가 로드되었는지 확인
+      if (gameService.points == 0) {
+        // 게임 데이터 로드 시도
+        await gameService.loadGameData();
+      }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
   
-  // 태그 관리 화면으로 이동
-  void _navigateToTagManagementScreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const TagManagementScreen()),
-    );
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+      
+      if (index == 0) {
+        _loadData();
+      }
+    });
   }
   
-  // 디지털 웰빙 화면으로 이동
-  void _navigateToWellbeingScreen(BuildContext context) {
-    Navigator.pushNamed(context, '/wellbeing');
-  }
-
-  // 감정 버튼 클릭 시 감정 기록 화면으로 이동
-  void _showEmotionDetailDialog(String emotion, String emoji) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => EmotionDetailScreen(
-          emotion: emotion,
-          emoji: emoji,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    final emotionService = Provider.of<EmotionService>(context);
+    final questService = Provider.of<QuestService>(context);
+    final gameService = Provider.of<GameService>(context);
+    
+    final user = FirebaseService.currentUser;
+    
+    final emotionCount = emotionService.getTodayEmotionCount();
+    
+    final gamePoints = gameService.getPoints();
+    
+    final List<Widget> _pages = [
+      _buildHomeContent(
+        context, 
+        emotionCount: emotionCount,
+        gamePoints: gamePoints
+      ),
+      const ReportScreen(),
+      const QuestScreen(),
+      const WellbeingScreen(),
+      const ProfileScreen(),
+    ];
+    
+    return Scaffold(
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        selectedItemColor: Theme.of(context).primaryColor,
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: '홈',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: '리포트',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.task_alt),
+            label: '퀘스트',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.smartphone),
+            label: '웰빙',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: '프로필',
+          ),
+        ],
       ),
     );
   }
+  
+  Widget _buildHomeContent(
+    BuildContext context, {
+    required int emotionCount,
+    required int gamePoints,
+  }) {
+    final emotionService = Provider.of<EmotionService>(context);
+    final questService = Provider.of<QuestService>(context);
+    
+    return Consumer<EmotionService>(
+      builder: (context, emotionService, _) {
+        return Consumer<QuestService>(
+          builder: (context, questService, _) {
+            if (!_authChecked) {
+              return Center(child: CircularProgressIndicator());
+            }
 
-  // 감정 선택 시 퀘스트 화면으로 이동
-  void _onEmotionQuestSelected(String emotion, String emoji) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => QuestScreen(
-          emotion: emotion,
-          emoji: emoji,
-        ),
-      ),
+            return CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  floating: true,
+                  snap: true,
+                  title: const Text('감정 퀘스트'),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications),
+                      onPressed: () {
+                        // 알림 화면으로 이동
+                      },
+                    ),
+                  ],
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '안녕하세요! 오늘 어떤 감정을 느끼세요?',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '오늘의 요약',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildSummaryItem(
+                                        context,
+                                        icon: Icons.emoji_emotions,
+                                        title: '감정 기록',
+                                        value: '$emotionCount회',
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildSummaryItem(
+                                        context,
+                                        icon: Icons.star,
+                                        title: '게임 포인트',
+                                        value: gamePoints.toString(),
+                                        color: Colors.yellow,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        _buildEmotionButtons(context, emotionService),
+                        
+                        const SizedBox(height: 24),
+                        
+                        const Text(
+                          '감정 추세',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildEmotionStatsSection(context),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
-
-  // 감정 버튼 생성 (감정 기록용)
-  Widget _buildEmotionRecordButton(String emotion, String emoji, bool isCustom) {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      child: ElevatedButton(
-        onPressed: () => _showEmotionDetailDialog(emotion, emoji),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+  
+  Widget _buildSummaryItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: color,
+          size: 32,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildEmotionButtons(BuildContext context, EmotionService emotionService) {
+    final List<Map<String, dynamic>> allEmotions = [
+      ...emotionService.baseEmotions,
+      ...emotionService.customEmotions,
+    ];
+    
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: allEmotions.length + 1,
+      itemBuilder: (context, index) {
+        if (index == allEmotions.length) {
+          return _buildAddEmotionButton(context);
+        } else {
+          final emotionData = allEmotions[index];
+          final isCustom = index >= emotionService.baseEmotions.length;
+          
+          return _buildEmotionButton(
+            context,
+            emotion: emotionData['emotion'],
+            emoji: emotionData['emoji'],
+            color: emotionData['color'] ?? Colors.grey,
+            isCustom: isCustom,
+            onTap: () {
+              _recordEmotion(emotionData);
+            },
+          );
+        }
+      },
+    );
+  }
+  
+  Widget _buildEmotionButton(
+    BuildContext context,
+    {
+      required String emotion,
+      required String emoji,
+      required Color color,
+      bool isCustom = false,
+      required VoidCallback onTap,
+    }
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withOpacity(0.3),
           ),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               emoji,
-              style: const TextStyle(fontSize: 32),
+              style: const TextStyle(fontSize: 28),
             ),
             const SizedBox(height: 8),
             Text(
               emotion,
               style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
             ),
-            if (isCustom)
-              const Icon(Icons.star, size: 14, color: Colors.amber),
           ],
         ),
       ),
     );
   }
-
-  // 퀘스트 감정 버튼 생성
-  Widget _buildQuestEmotionButton(String emotion, String emoji) {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      child: ElevatedButton(
-        onPressed: () => _onEmotionQuestSelected(emotion, emoji),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.all(16),
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+  
+  Widget _buildAddEmotionButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const CustomEmotionScreen()),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).dividerColor,
           ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Icon(Icons.add, size: 32),
+            SizedBox(height: 8),
             Text(
-              emoji,
-              style: const TextStyle(fontSize: 32),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              emotion,
+              '감정 추가',
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
-            const Icon(Icons.fitness_center, size: 14),
           ],
         ),
       ),
     );
   }
 
-  // 감정 그리드 생성 (감정 기록용)
-  Widget _buildEmotionRecordGrid() {
-    final emotionService = Provider.of<EmotionService>(context);
-    final customEmotions = emotionService.customEmotions;
-    final allEmotions = [
-      ...emotionService.defaultEmotions.map((e) => {'emotion': e['emotion'], 'emoji': e['emoji']}),
-      ...customEmotions.map((e) => {'emotion': e['emotion'], 'emoji': e['emoji']}),
-    ];
+  Future<void> _recordEmotion(Map<String, dynamic> emotionData) async {
+    final emotion = emotionData['emotion'];
+    final emoji = emotionData['emoji'];
+    final isCustom = emotionData['isCustom'] ?? false;
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.5,
-      ),
-      itemCount: allEmotions.length,
-      itemBuilder: (context, index) {
-        final emotion = allEmotions[index];
-        final isCustom = index >= emotionService.defaultEmotions.length;
-        
-        return _buildEmotionRecordButton(
-          emotion['emotion']!,
-          emotion['emoji']!,
-          isCustom,
+    final recordDetails = await _showRecordDetailDialog(
+      context,
+      emotion: emotion,
+      emoji: emoji,
+    );
+
+    if (recordDetails != null) {
+      final record = EmotionRecord(
+        emotion: emotion,
+        emoji: emoji,
+        timestamp: DateTime.now(),
+        details: recordDetails['notes'],
+        tags: recordDetails['tags'],
+        isCustomEmotion: isCustom,
+        imageUrl: recordDetails['imageUrl'],
+        videoUrl: recordDetails['videoUrl'],
+        audioUrl: recordDetails['audioUrl'],
+        diaryContent: recordDetails['diaryContent'],
+      );
+
+      try {
+        final emotionService = Provider.of<EmotionService>(context, listen: false);
+        final recordId = await emotionService.saveEmotionRecord(record);
+
+        if (recordId != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$emotion 감정이 기록되었습니다.')),
+          );
+          
+          final gameService = Provider.of<GameService>(context, listen: false);
+          await gameService.processRewardForRecord(record.copyWith(id: recordId));
+
+          _showQuestSuggestionDialog(context, emotion);
+          
+          _loadData();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('감정 기록 저장 실패'), backgroundColor: Colors.red),
+          );
+        }
+      } catch (e) {
+        print('감정 기록 처리 오류: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('오류 발생: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showRecordDetailDialog(
+    BuildContext context, {
+    required String emotion,
+    required String emoji,
+  }) async {
+    String notes = '';
+    String diaryContent = '';
+    List<String> tags = [];
+    XFile? imageFile;
+    XFile? videoFile;
+
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    final ImagePicker picker = ImagePicker();
+
+    final availableTags = await Provider.of<EmotionService>(context, listen: false).getAllTags();
+
+    return await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('$emoji $emotion 감정 기록'),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: '메모 (선택)',
+                          hintText: '상황, 생각 등을 간단히 기록하세요.',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                        onChanged: (value) {
+                          notes = value;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: '감정 일기 (선택)',
+                          hintText: '오늘의 감정에 대해 자세히 써보세요.',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 5,
+                        onChanged: (value) {
+                          diaryContent = value;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      const Text('태그 (선택)'),
+                      Wrap(
+                        spacing: 8.0,
+                        children: availableTags.map((tag) {
+                          final isSelected = tags.contains(tag);
+                          return ChoiceChip(
+                            label: Text(tag),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  tags.add(tag);
+                                } else {
+                                  tags.remove(tag);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      
+                      const SizedBox(height: 16),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Column(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.image),
+                                onPressed: () async {
+                                  final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+                                  if (pickedFile != null) {
+                                    setState(() {
+                                      imageFile = pickedFile;
+                                    });
+                                  }
+                                },
+                              ),
+                              const Text('이미지', style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.videocam),
+                                onPressed: () async {
+                                  final pickedFile = await picker.pickVideo(source: ImageSource.gallery);
+                                  if (pickedFile != null) {
+                                    setState(() {
+                                      videoFile = pickedFile;
+                                    });
+                                  }
+                                },
+                              ),
+                              const Text('비디오', style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.mic),
+                                onPressed: () {
+                                  // 음성 녹음 기능 구현
+                                },
+                              ),
+                              const Text('음성 메모', style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      if (imageFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16.0),
+                          child: kIsWeb 
+                            ? FutureBuilder<Uint8List>(
+                                future: imageFile!.readAsBytes(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+                                    return Column(
+                                      children: [
+                                        Image.memory(
+                                          snapshot.data!,
+                                          height: 100,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            print('웹 이미지 미리보기 오류: $error');
+                                            return Column(
+                                              children: [
+                                                Icon(Icons.image, size: 40, color: Colors.grey),
+                                                Text('이미지 미리보기를 표시할 수 없습니다.'),
+                                                Text('선택된 파일: ${imageFile!.name}', style: TextStyle(fontSize: 12))
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                        Text('선택된 이미지: ${imageFile!.name}', style: TextStyle(fontSize: 12)),
+                                      ],
+                                    );
+                                  } else if (snapshot.hasError) {
+                                    return Column(
+                                      children: [
+                                        Icon(Icons.image, size: 40, color: Colors.grey),
+                                        Text('이미지 로드 오류: ${snapshot.error}'),
+                                        Text('선택된 파일: ${imageFile!.name}', style: TextStyle(fontSize: 12))
+                                      ],
+                                    );
+                                  } else {
+                                    return Column(
+                                      children: [
+                                        CircularProgressIndicator(),
+                                        SizedBox(height: 8),
+                                        Text('이미지 로드 중...'),
+                                        Text('선택된 파일: ${imageFile!.name}', style: TextStyle(fontSize: 12))
+                                      ],
+                                    );
+                                  }
+                                },
+                              )
+                            : Image.file(
+                                File(imageFile!.path), 
+                                height: 100, 
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('이미지 로드 오류: $error');
+                                  return Column(
+                                    children: [
+                                      Icon(Icons.image, size: 40, color: Colors.grey),
+                                      Text('이미지 미리보기를 표시할 수 없습니다.'),
+                                      Text('선택된 파일: ${imageFile!.name}', style: TextStyle(fontSize: 12))
+                                    ],
+                                  );
+                                },
+                              ),
+                        ),
+                      if (videoFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16.0),
+                          child: Text('선택된 비디오: ${videoFile!.name}'),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('취소'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    String? imageUrl;
+                    String? videoUrl;
+                    
+                    final userId = FirebaseService.currentUser?.uid;
+                    if (userId != null) {
+                      if (imageFile != null) {
+                        final imagePath = 'emotion_records/$userId/images/${DateTime.now().millisecondsSinceEpoch}_${imageFile!.name}';
+                        
+                        if (kIsWeb) {
+                          // 웹 환경에서는 XFile에서 바이트 데이터를 읽어 업로드
+                          final bytes = await imageFile!.readAsBytes();
+                          imageUrl = await FirebaseService.uploadFileBytes(imagePath, bytes);
+                        } else {
+                          // 모바일 환경에서는 기존 방식대로 File 객체 사용
+                          imageUrl = await FirebaseService.uploadFile(imagePath, File(imageFile!.path));
+                        }
+                      }
+                      if (videoFile != null) {
+                        final videoPath = 'emotion_records/$userId/videos/${DateTime.now().millisecondsSinceEpoch}_${videoFile!.name}';
+                        
+                        if (kIsWeb) {
+                          // 웹 환경에서는 XFile에서 바이트 데이터를 읽어 업로드
+                          final bytes = await videoFile!.readAsBytes();
+                          videoUrl = await FirebaseService.uploadFileBytes(videoPath, bytes);
+                        } else {
+                          // 모바일 환경에서는 기존 방식대로 File 객체 사용
+                          videoUrl = await FirebaseService.uploadFile(videoPath, File(videoFile!.path));
+                        }
+                      }
+                    }
+                    
+                    Navigator.pop(context, {
+                      'notes': notes,
+                      'tags': tags,
+                      'diaryContent': diaryContent,
+                      'imageUrl': imageUrl,
+                      'videoUrl': videoUrl,
+                      'audioUrl': null,
+                    });
+                  },
+                  child: const Text('기록하기'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
-
-  // 퀘스트 감정 그리드 생성
-  Widget _buildQuestEmotionGrid() {
-    final questService = Provider.of<QuestService>(context);
-    final emotions = questService.availableEmotions;
-
-    // 감정별 이모지 매핑
-    final emojiMap = {
-      '감사': '🙏',
-      '기쁨': '😊',
-      '무기력': '😔',
-      '불안': '😰',
-      '우울': '😢',
-      '집중': '🎯',
-      '짜증': '😤',
-      '평온': '😌',
-    };
-
-    if (questService.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (emotions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('감정 퀘스트를 불러올 수 없습니다.'),
-            const SizedBox(height: 16),
+  
+  void _showQuestSuggestionDialog(BuildContext context, String emotion) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('$emotion 관련 퀘스트'),
+          content: Text('이 감정과 관련된 퀘스트를 수행하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('나중에'),
+            ),
             ElevatedButton(
-              onPressed: () async {
-                await questService.loadQuests();
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EmotionQuestScreen(
+                      selectedEmotion: emotion,
+                    ),
+                  ),
+                );
               },
-              child: const Text('다시 시도'),
+              child: const Text('퀘스트 보기'),
             ),
           ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.2,
-      ),
-      itemCount: emotions.length,
-      itemBuilder: (context, index) {
-        final emotion = emotions[index];
-        final emoji = emojiMap[emotion] ?? '❓';
-        return _buildQuestEmotionButton(emotion, emoji);
+        );
       },
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
+  
+  Widget _buildEmotionStatsSection(BuildContext context) {
     final emotionService = Provider.of<EmotionService>(context);
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    bool isLoggedIn = false;
     
-    try {
-      // 로그인 상태 검증 강화: 초기화 확인 + 현재 사용자 확인 + 사용자 이메일 확인
-      final currentUser = FirebaseService.currentUser;
-      isLoggedIn = _isFirebaseInitialized && 
-                   currentUser != null && 
-                   currentUser.email != null && 
-                   currentUser.email!.isNotEmpty;
-    } catch (e) {
-      print('로그인 상태 확인 오류: $e');
-      isLoggedIn = false;
-    }
-    
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          '감정 퀘스트',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
-          // 메뉴 버튼
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'theme') {
-                _toggleTheme(context);
-              } else if (value == 'logout') {
-                _showLogoutConfirmDialog(context);
-              } else if (value == 'custom_emotions') {
-                _navigateToCustomEmotionScreen(context);
-              } else if (value == 'tag_management') {
-                _navigateToTagManagementScreen(context);
-              } else if (value == 'digital_wellbeing') {
-                _navigateToWellbeingScreen(context);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'theme',
-                child: Row(
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '감정 추세',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
                   children: [
-                    Icon(Icons.brightness_6),
-                    SizedBox(width: 8),
-                    Text('테마 변경'),
+                    IconButton(
+                      icon: Icon(Icons.settings, size: 20),
+                      onPressed: () {
+                        _showEmotionScoreSettings(context, emotionService);
+                      },
+                      tooltip: '감정 점수 설정',
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(context, '/report');
+                      },
+                      child: Text(
+                        '자세히 보기',
+                        style: TextStyle(
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'custom_emotions',
-                child: Row(
-                  children: [
-                    Icon(Icons.emoji_emotions),
-                    SizedBox(width: 8),
-                    Text('감정 관리'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'tag_management',
-                child: Row(
-                  children: [
-                    Icon(Icons.tag),
-                    SizedBox(width: 8),
-                    Text('태그 관리'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'digital_wellbeing',
-                child: Row(
-                  children: [
-                    Icon(Icons.phone_android),
-                    SizedBox(width: 8),
-                    Text('디지털 웰빙'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout),
-                    SizedBox(width: 8),
-                    Text('로그아웃'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.fitness_center),
-              text: '감정 퀘스트',
+              ],
             ),
-            Tab(
-              icon: Icon(Icons.edit_note),
-              text: '감정 기록',
-            ),
-            Tab(
-              icon: Icon(Icons.person),
-              text: '프로필',
+            const SizedBox(height: 16),
+            
+            FutureBuilder<Map<String, double>>(
+              future: _calculateDayScores(emotionService),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: SizedBox(
+                      height: 150,
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text('데이터를 불러오는 중 오류가 발생했습니다.'),
+                  );
+                }
+                
+                final dayScores = snapshot.data ?? {
+                  '월': 0.5, '화': 0.5, '수': 0.5, '목': 0.5, '금': 0.5, '토': 0.5, '일': 0.5
+                };
+                
+                return _buildSimpleChart(context, dayScores);
+              },
             ),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // 감정 퀘스트 탭
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  '감정에 맞는 퀘스트를 선택해보세요',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              Expanded(
-                child: _buildQuestEmotionGrid(),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-          
-          // 감정 기록 탭
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  '오늘의 감정을 기록해보세요',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              Expanded(
-                child: _buildEmotionRecordGrid(),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CustomEmotionScreen(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('나만의 감정 만들기'),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-
-          // 프로필 탭
-          const ProfileScreen(),
-        ],
-      ),
     );
   }
-
-  void _toggleTheme(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context, listen: false);
-    themeService.toggleTheme();
+  
+  Widget _buildSimpleChart(BuildContext context, Map<String, double> dayScores) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black;
+    
+    return Column(
+      children: [
+        const Text('요일별 감정 점수', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 16),
+        
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildDayColumn(context, '월', dayScores['월'] ?? 0.5),
+            _buildDayColumn(context, '화', dayScores['화'] ?? 0.5),
+            _buildDayColumn(context, '수', dayScores['수'] ?? 0.5),
+            _buildDayColumn(context, '목', dayScores['목'] ?? 0.5),
+            _buildDayColumn(context, '금', dayScores['금'] ?? 0.5),
+            _buildDayColumn(context, '토', dayScores['토'] ?? 0.5),
+            _buildDayColumn(context, '일', dayScores['일'] ?? 0.5),
+          ],
+        ),
+        
+        const SizedBox(height: 16),
+        
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Text('부정', style: TextStyle(fontSize: 12)),
+            const SizedBox(width: 12),
+            
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.amber,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Text('중립', style: TextStyle(fontSize: 12)),
+            const SizedBox(width: 12),
+            
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Text('긍정', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+      ],
+    );
   }
-
-  void _saveEmotionRecord(String emotion, String emoji) async {
-    if (emotion.isEmpty) {
-      _showMessage('감정을 선택해주세요.', isError: true);
-      return;
+  
+  Widget _buildDayColumn(BuildContext context, String day, double score) {
+    Color color;
+    if (score > 0.65) {
+      color = Colors.green;
+    } else if (score > 0.35) {
+      color = Colors.amber;
+    } else {
+      color = Colors.red;
     }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      // 현재 시간 및 타임스탬프 생성
-      final now = DateTime.now();
-      
-      // 감정 기록 생성
-      final record = EmotionRecord(
-        emotion: emotion,
-        emoji: emoji,
-        details: _detailsController.text.trim(), // 비어있어도 저장 허용
-        timestamp: now,
-        tags: List.from(_selectedTags),
-      ).toJson();
-      
-      // 서비스를 통해 저장
-      final result = await FirebaseService.saveEmotionRecord(record);
-      
-      if (result['success'] == true) {
-        // 입력 필드 초기화
-        _detailsController.clear();
-        setState(() {
-          _selectedEmotion = '';
-          _selectedEmotionEmoji = '';
-          _selectedTags = {};
-        });
-        
-        // 성공 메시지 표시
-        _showMessage('감정이 기록되었습니다.');
-        
-        // EmotionService 새로고침
-        Provider.of<EmotionService>(context, listen: false).refreshEmotionRecords();
+    
+    return Column(
+      children: [
+        Text(
+          day,
+          style: TextStyle(fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: 16,
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Container(
+                width: 16,
+                height: 120 * score,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${(score * 100).toInt()}%',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Future<Map<String, double>> _calculateDayScores(EmotionService emotionService) async {
+    final now = DateTime.now();
+    final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+    
+    final records = await emotionService.getEmotionRecords(
+      startDate: thirtyDaysAgo,
+      endDate: now,
+    );
+    
+    if (records.isEmpty) {
+      return {
+        '월': 0.5, '화': 0.5, '수': 0.5, '목': 0.5, '금': 0.5, '토': 0.5, '일': 0.5
+      };
+    }
+    
+    final dayGroups = <String, List<EmotionRecord>>{
+      '월': [], '화': [], '수': [], '목': [], '금': [], '토': [], '일': []
+    };
+    
+    final days = ['월', '화', '수', '목', '금', '토', '일'];
+    for (var record in records) {
+      final weekday = record.timestamp.weekday;
+      final day = days[weekday - 1];
+      dayGroups[day]?.add(record);
+    }
+    
+    final dayScores = <String, double>{};
+    dayGroups.forEach((day, dayRecords) {
+      if (dayRecords.isEmpty) {
+        dayScores[day] = 0.5;
       } else {
-        _showMessage('감정 기록 중 오류가 발생했습니다.', isError: true);
+        double totalScore = 0;
+        for (var record in dayRecords) {
+          totalScore += emotionService.getEmotionScore(record.emotion);
+        }
+        dayScores[day] = totalScore / dayRecords.length;
       }
-    } catch (e) {
-      print('감정 기록 오류: $e');
-      _showMessage('감정 기록 중 오류가 발생했습니다: $e', isError: true);
-    } finally {
-      setState(() {
-        _isSaving = false;
-      });
-    }
+    });
+    
+    return dayScores;
   }
-
-  // 로그아웃 확인 다이얼로그
-  void _showLogoutConfirmDialog(BuildContext context) {
+  
+  void _showEmotionScoreSettings(BuildContext context, EmotionService emotionService) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('로그아웃'),
-        content: const Text('정말 로그아웃 하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await FirebaseService.signOut();
-                if (mounted) {
-                  // 로그인 상태를 강제로 갱신
-                  setState(() {
-                    // 로그아웃 후 상태 갱신
-                  });
-                  // 로그인 화면으로 이동
-                  Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('로그아웃 오류: $e')),
-                );
-              }
-            },
-            child: const Text('로그아웃'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
-  }
-}
-
-// 메뉴 버튼 위젯
-class _MenuButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _MenuButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
+      builder: (context) {
+        Map<String, double> tempScores = Map.from(emotionService.emotionScores);
+        
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('감정 점수 설정'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    const Text(
+                      '각 감정이 당신의 기분에 미치는 영향을 설정하세요. 0은 매우 부정적, 1은 매우 긍정적입니다.',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    ...emotionService.allEmotions.map((emotion) {
+                      final name = emotion['emotion'] as String;
+                      final emoji = emotion['emoji'] as String;
+                      final color = emotion['color'] as Color;
+                      
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(fontSize: 20),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name),
+                                  Slider(
+                                    value: tempScores[name] ?? 0.5,
+                                    min: 0.0,
+                                    max: 1.0,
+                                    divisions: 10,
+                                    label: ((tempScores[name] ?? 0.5) * 10).round().toString(),
+                                    onChanged: (newValue) {
+                                      setState(() {
+                                        tempScores[name] = newValue;
+                                      });
+                                    },
+                                    activeColor: color,
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text('부정', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      Text('중립', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      Text('긍정', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('취소'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await emotionService.resetEmotionScores();
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('감정 점수가 기본값으로 초기화되었습니다.')),
+                    );
+                  },
+                  child: const Text('기본값으로 초기화'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final result = await emotionService.setEmotionScores(tempScores);
+                    Navigator.pop(context);
+                    if (result) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('감정 점수가 저장되었습니다.')),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('감정 점수 저장 중 오류가 발생했습니다.')),
+                      );
+                    }
+                  },
+                  child: const Text('저장'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 } 

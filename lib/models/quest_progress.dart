@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class QuestProgress {
-  final int questId;
+  final String questId;
   final DateTime startTime;
   DateTime? completionTime;
   final List<String> checkPoints;
@@ -39,7 +39,7 @@ class QuestProgress {
 
   // JSON에서 생성
   factory QuestProgress.fromJson(Map<String, dynamic> json) => QuestProgress(
-    questId: json['questId'],
+    questId: json['questId'].toString(),
     startTime: DateTime.fromMillisecondsSinceEpoch(json['startTime']),
     completionTime: json['completionTime'] != null 
       ? DateTime.fromMillisecondsSinceEpoch(json['completionTime'])

@@ -1,56 +1,72 @@
-import 'package:emotion_control/services/emotion_service.dart';
-import 'package:emotion_control/services/theme_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'services/emotion_service.dart';
+import 'services/theme_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/wellbeing_screen.dart';
-import './services/wellbeing_service.dart';
-import './services/game_service.dart';
-import './services/quest_service.dart';
+import 'services/wellbeing_service.dart';
+import 'services/game_service.dart';
+import 'services/quest_service.dart';
 import 'services/firebase_service.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Firebase 초기화
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
-  // QuestService 초기화
+  // 사용자 로그인 상태 확인
+  final user = FirebaseService.currentUser;
+  
+  // 앱 최초 실행 여부 확인 (로그인 상태인 경우 무시)
+  bool firstLaunch = false;
+  if (user == null) {
+    final prefs = await SharedPreferences.getInstance();
+    firstLaunch = !(prefs.getBool('app_launched_before') ?? false);
+    
+    // 앱 실행 기록 저장 (로그인되지 않은 경우에만)
+    if (firstLaunch) {
+      await prefs.setBool('app_launched_before', true);
+    }
+  }
+  
+  // EmotionService 및 QuestService 인스턴스 생성
+  final emotionService = EmotionService();
   final questService = QuestService();
+  final gameService = GameService();
   
-  // Firebase 초기화 전에 assets 로드 시도
-  try {
-    await questService.loadQuests();
-    print('퀘스트 서비스 초기화 완료');
-  } catch (e) {
-    print('퀘스트 서비스 초기화 오류: $e');
+  // 사용자가 인증된 경우 초기 데이터 로드
+  if (user != null) {
+    // 비동기로 데이터 로드 시작 (결과는 기다리지 않음)
+    emotionService.loadEmotionRecords();
+    questService.loadQuests();
   }
 
-  bool firebaseInitialized = false;
-  
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await FirebaseService.initializeFirebase();
-    firebaseInitialized = true;
-    print('Firebase initialized successfully');
-  } catch (e) {
-    print('Failed to initialize Firebase: $e');
-  }
-
-  // 앱 실행
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => EmotionService()),
+        ChangeNotifierProvider<EmotionService>(
+          create: (context) => emotionService,
+        ),
+        ChangeNotifierProvider<QuestService>(
+          create: (context) => questService,
+        ),
+        ChangeNotifierProvider<GameService>(
+          create: (context) => gameService,
+        ),
         ChangeNotifierProvider(create: (context) => ThemeService()),
         ChangeNotifierProvider(create: (context) => WellbeingService()),
-        Provider<bool>.value(value: firebaseInitialized),
-        ChangeNotifierProvider(create: (_) => GameService()),
-        ChangeNotifierProvider.value(value: questService),
+        Provider<bool>.value(value: true),
+        // 앱 최초 실행 여부 공유
+        Provider<bool>.value(value: firstLaunch),
       ],
       child: const MyApp(),
     ),
@@ -63,6 +79,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firebaseInitialized = Provider.of<bool>(context);
+    // 앱 최초 실행 여부
+    final firstLaunch = Provider.of<bool>(context, listen: false);
+    
+    // 로그인 상태를 체크
+    final user = FirebaseService.currentUser;
+    print('현재 로그인 상태: ${user != null ? "로그인됨 (${user.email})" : "로그인되지 않음"}');
     
     return Consumer<ThemeService>(
       builder: (context, themeService, _) {
@@ -75,7 +97,8 @@ class MyApp extends StatelessWidget {
           theme: themeService.getLightTheme(),
           darkTheme: themeService.getDarkTheme(),
           themeMode: themeService.themeMode,
-          home: _getInitialScreen(firebaseInitialized),
+          // 앱 최초 실행 시 또는 로그인 안된 상태면 스플래시 화면, 그렇지 않으면 홈 화면으로 이동
+          home: _getInitialScreen(firstLaunch),
           routes: {
             '/report': (context) => const ReportScreen(),
             '/wellbeing': (context) => const WellbeingScreen(),
@@ -95,8 +118,25 @@ class MyApp extends StatelessWidget {
     );
   }
 
-  Widget _getInitialScreen(bool firebaseInitialized) {
-    // Implement the logic to determine the initial screen based on the firebaseInitialized state
-    return const HomeScreen();
+  Widget _getInitialScreen(bool firstLaunch) {
+    // 로그인 상태를 먼저 확인
+    final user = FirebaseService.currentUser;
+    
+    // 로그인된 사용자는 항상 홈 화면으로 이동
+    if (user != null) {
+      return const HomeScreen();
+    }
+    
+    // 스플래시 화면을 표시할지 여부 확인
+    bool showSplash = false;
+    SharedPreferences.getInstance().then((prefs) {
+      bool splashShown = prefs.getBool('splash_shown') ?? false;
+      if (!splashShown) {
+        prefs.setBool('splash_shown', true);
+      }
+    });
+    
+    // 스플래시 화면을 한 번도 보지 않았으면 표시, 그렇지 않으면 로그인 화면으로 이동
+    return firstLaunch ? const SplashScreen() : const AuthScreen();
   }
 }

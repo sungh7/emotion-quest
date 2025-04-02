@@ -18,7 +18,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
   final _emotionFocusNode = FocusNode();
   final _emojiFocusNode = FocusNode();
   
-  List<Map<String, String>> _customEmotions = [];
+  List<Map<String, dynamic>> _customEmotions = [];
   bool _isLoading = true;
   bool _isSaving = false;
   
@@ -71,14 +71,17 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
     
     try {
       final emotionService = Provider.of<EmotionService>(context, listen: false);
-      final success = await emotionService.addCustomEmotion(emotionName, emoji);
+      // 컬러는 임의로 설정 (나중에 칼라 선택기를 추가할 수 있음)
+      final color = Colors.primaries[_customEmotions.length % Colors.primaries.length];
+      final success = await emotionService.addCustomEmotion(emotionName, emoji, color);
       
       if (success) {
         _emotionController.clear();
         _emojiController.clear();
         
+        // 사용자 정의 감정 목록 새로 로드
         setState(() {
-          _customEmotions = emotionService.customEmotions;
+          _customEmotions = List.from(emotionService.customEmotions);
         });
         
         if (mounted) {
@@ -113,12 +116,13 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
   }
   
   // 감정 삭제
-  Future<void> _deleteEmotion(String emotion) async {
+  Future<void> _deleteEmotion(Map<String, dynamic> emotion) async {
+    final emotionName = emotion['emotion'] as String;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('감정 삭제'),
-        content: Text('정말 "$emotion" 감정을 삭제하시겠습니까?'),
+        content: Text('정말 "$emotionName" 감정을 삭제하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -146,7 +150,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
       final success = await emotionService.removeCustomEmotion(emotion);
       
       setState(() {
-        _customEmotions = emotionService.customEmotions;
+        _customEmotions = List.from(emotionService.customEmotions);
         _isLoading = false;
       });
       
@@ -338,7 +342,7 @@ class _CustomEmotionScreenState extends State<CustomEmotionScreen> {
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete),
-                            onPressed: () => _deleteEmotion(emotion['emotion'] ?? ''),
+                            onPressed: () => _deleteEmotion(emotion),
                             tooltip: '감정 삭제',
                             color: Colors.red[400],
                           ),

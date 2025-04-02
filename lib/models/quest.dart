@@ -1,30 +1,67 @@
-class Quest {
-  final int id;
-  final String title;
-  final String emotion;
-  final String task;
-  final String difficulty;
-  final int expReward;  // 난이도별 경험치 보상
+// 타입 정의 명확화를 위한 export 추가
+export 'quest.dart';
 
-  const Quest({
+class Quest {
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final int rewardPoints;
+  final bool isCompleted;
+
+  Quest({
     required this.id,
     required this.title,
-    required this.emotion,
-    required this.task,
-    required this.difficulty,
-    required this.expReward,
+    required this.description,
+    required this.category,
+    this.rewardPoints = 10,
+    this.isCompleted = false,
   });
+
+  // 추가된 emotion과 difficulty 게터
+  String get emotion => category;
+  String get difficulty => _getDifficultyFromPoints(rewardPoints);
+  int get expReward => rewardPoints;
+
+  String _getDifficultyFromPoints(int points) {
+    if (points >= 100) return '상';
+    if (points >= 50) return '중';
+    return '하';
+  }
+
+  Quest copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? category,
+    int? rewardPoints,
+    bool? isCompleted,
+  }) {
+    return Quest(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      rewardPoints: rewardPoints ?? this.rewardPoints,
+      isCompleted: isCompleted ?? this.isCompleted,
+    );
+  }
 
   // CSV 데이터로부터 Quest 객체 생성
   factory Quest.fromCsv(Map<String, dynamic> data) {
-    // 필드 검증 및 기본값 설정
-    final idStr = data[''] ?? '0';
-    int id;
-    try {
-      id = int.parse(idStr);
-    } catch (e) {
-      id = 0;
-      print('ID 파싱 오류: $idStr, 기본값 0으로 설정');
+    // 고유 ID 생성 로직
+    String uniqueId;
+    
+    // ID 필드 시도
+    final idStr = data[''] ?? '';
+    
+    if (idStr.isNotEmpty) {
+      // ID 필드가 있으면 사용
+      uniqueId = idStr;
+    } else {
+      // 없으면 퀘스트 내용 기반 해시 생성
+      final hashContent = '${data['감정'] ?? ''}|${data['퀘스트'] ?? ''}|${DateTime.now().millisecondsSinceEpoch}';
+      uniqueId = hashContent.hashCode.toString();
     }
 
     final emotion = data['감정'] ?? '알 수 없음';
@@ -49,12 +86,12 @@ class Quest {
     }
 
     return Quest(
-      id: id,
+      id: uniqueId,
       title: title,
-      emotion: emotion,
-      task: task,
-      difficulty: difficulty,
-      expReward: exp,
+      description: task,
+      category: emotion,
+      rewardPoints: exp,
+      isCompleted: false,
     );
   }
 
@@ -63,10 +100,22 @@ class Quest {
     return {
       'id': id,
       'title': title,
-      'emotion': emotion,
-      'task': task,
-      'difficulty': difficulty,
-      'expReward': expReward,
+      'description': description,
+      'category': category,
+      'rewardPoints': rewardPoints,
+      'isCompleted': isCompleted,
     };
+  }
+
+  // JSON 데이터로부터 Quest 객체 생성
+  factory Quest.fromJson(Map<String, dynamic> json) {
+    return Quest(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      category: json['category'] ?? '',
+      rewardPoints: json['rewardPoints'] ?? 10,
+      isCompleted: json['isCompleted'] ?? false,
+    );
   }
 } 

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 import '../services/theme_service.dart';
+import '../screens/home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({Key? key}) : super(key: key);
@@ -92,7 +93,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           HapticFeedback.mediumImpact();
           
           if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const HomeScreen(),
+              ),
+            );
           }
         }
       } else {
@@ -105,7 +110,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           HapticFeedback.mediumImpact();
           
           if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const HomeScreen(),
+              ),
+            );
           }
         }
       }
