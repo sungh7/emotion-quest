@@ -235,10 +235,11 @@ class _QuestScreenState extends State<QuestScreen> {
                       : activeQuestId == quest.id.toString()
                         ? ElevatedButton.icon(
                             onPressed: () {
-                              Navigator.pushNamed(
-                                context, 
-                                '/quest_detail',
-                                arguments: quest,
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => QuestDetailScreen(quest: quest),
+                                ),
                               );
                             },
                             icon: const Icon(Icons.play_arrow, size: 16),
@@ -257,13 +258,27 @@ class _QuestScreenState extends State<QuestScreen> {
                         : ElevatedButton.icon(
                             onPressed: quest.isCompleted 
                               ? null
-                              : () {
-                                  questService.startQuest(quest);
-                                  Navigator.pushNamed(
-                                    context, 
-                                    '/quest_detail',
-                                    arguments: quest,
-                                  );
+                              : () async {
+                                  try {
+                                    await questService.startQuest(quest);
+                                    if (mounted) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => QuestDetailScreen(quest: quest),
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('퀘스트 시작 중 오류가 발생했습니다: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
                                 },
                             icon: const Icon(Icons.play_arrow, size: 16),
                             label: const Text(

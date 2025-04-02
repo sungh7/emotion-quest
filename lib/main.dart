@@ -15,6 +15,8 @@ import 'services/game_service.dart';
 import 'services/quest_service.dart';
 import 'services/firebase_service.dart';
 import 'screens/splash_screen.dart';
+import 'screens/quest_detail_screen.dart';
+import 'models/quest.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,6 +105,10 @@ class MyApp extends StatelessWidget {
             '/report': (context) => const ReportScreen(),
             '/wellbeing': (context) => const WellbeingScreen(),
             '/auth': (context) => const AuthScreen(),
+            '/quest_detail': (context) {
+              final quest = ModalRoute.of(context)!.settings.arguments as Quest;
+              return QuestDetailScreen(quest: quest);
+            },
           },
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,

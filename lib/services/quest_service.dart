@@ -179,34 +179,43 @@ class QuestService extends ChangeNotifier {
   }
   
   // 퀘스트 시작
-  void startQuest(Quest quest) {
-    final String questId = quest.id.toString();
-    
-    // 이미 진행 중인 퀘스트인 경우
-    if (_questProgresses.containsKey(questId)) {
-      // 이미 완료된 퀘스트는 다시 시작하지 않음
-      if (_questProgresses[questId]!.isCompleted) {
-        print('이미 완료된 퀘스트입니다: $questId');
-        return;
+  Future<void> startQuest(Quest quest) async {
+    try {
+      final String questId = quest.id.toString();
+      
+      // 이미 진행 중인 퀘스트인 경우
+      if (_questProgresses.containsKey(questId)) {
+        // 이미 완료된 퀘스트는 다시 시작하지 않음
+        if (_questProgresses[questId]!.isCompleted) {
+          print('이미 완료된 퀘스트입니다: $questId');
+          return;
+        }
+        
+        // 진행 중이던 퀘스트를 활성화
+        _activeQuestId = questId;
+        print('기존 진행 중이던 퀘스트 활성화: $questId');
+      } else {
+        // 새로운 퀘스트 시작
+        _questProgresses[questId] = QuestProgress(
+          questId: questId,
+          startTime: DateTime.now(),
+          checkPoints: _generateCheckpoints(quest),
+        );
+        _activeQuestId = questId;
+        print('새 퀘스트 시작: $questId');
       }
       
-      // 진행 중이던 퀘스트를 활성화
-      _activeQuestId = questId;
-      print('기존 진행 중이던 퀘스트 활성화: $questId');
-    } else {
-      // 새로운 퀘스트 시작
-      _questProgresses[questId] = QuestProgress(
-        questId: questId,
-        startTime: DateTime.now(),
-        checkPoints: _generateCheckpoints(quest),
-      );
-      _activeQuestId = questId;
-      print('새 퀘스트 시작: $questId');
+      // 타이머 시작
+      _startQuestTimer();
+      
+      // Firebase에 진행 상황 저장
+      await saveProgress();
+      
+      notifyListeners();
+    } catch (e) {
+      print('퀘스트 시작 오류: $e');
+      throw Exception('퀘스트를 시작할 수 없습니다: $e');
     }
-    
-    // 타이머 시작
-    _startQuestTimer();
-    notifyListeners();
   }
   
   // 난이도별 체크포인트 생성
