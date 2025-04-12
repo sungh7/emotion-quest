@@ -1,0 +1,51 @@
+# Flutter/Dart specific
+**/build/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+out/
+coverage/
+
+# Firebase specific
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+
+# Native related
+**/ios/Pods/
+**/macos/Pods/
+**/android/.gradle
+**/android/local.properties
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/android/gradle/wrapper/gradle-wrapper.jar
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Generated.xcconfig
+**/ios/.symlinks/
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Exceptions to above rules
+!**/ios/Flutter/ephemeral/Flutter-Generated.xcconfig
+!**/ios/Flutter/ephemeral/GeneratedPluginRegistrant.*
+
+# IDE and editor directories
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+.DS_Store
+
+# Credentials, environment and local configuration
+**/*.env
+**/local.properties
+**/secrets.json
+**/key.properties 
